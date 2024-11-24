@@ -20,9 +20,9 @@ This guide explains how to use the `makeitarchinstall.sh` script to install Arch
 
 ### 1. Get the Installation Files
 ```bash
-# Clone the repository (if using git) or copy files to the installation environment
-git clone https://your-repo-url.git
-cd install
+# Clone the repository
+git clone https://github.com/koltanl/arch-install.git
+cd arch-install
 ```
 
 ### 2. Run the Installation Script
@@ -87,8 +87,8 @@ When using a single partition:
 ### Full Disk Setup
 When using entire disk:
 - EFI/Boot partitions (based on bootloader type)
-- 100GB root partition
-- Remaining space for encrypted home partition
+- 100GB root partition (ext4)
+- Remaining space for encrypted home partition (ext4)
 - 8GB swap file
 
 ## Troubleshooting
@@ -111,7 +111,7 @@ If you encounter issues:
 1. Check the error messages
 2. Verify hardware compatibility
 3. Ensure UEFI/BIOS settings are correct
-4. File an issue on the repository
+4. File an issue at https://github.com/koltanl/arch-install/issues
 
 ## Notes
 
