@@ -36,20 +36,35 @@ DEBUG=${DEBUG:-0}
 # Update the .zprofile modification
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF
 # Auto-start the installation script
-if [ -f ${script_path} ]; then
-    export DEBUG=$DEBUG
-    echo "Starting automatic installation..."
-    echo "You can find documentation in /root/custom/README.md"
-    sleep 2
-    
-    # Create a flag file to prevent multiple runs
-    if [ ! -f /tmp/.install_started ]; then
-        touch /tmp/.install_started
+(
+    echo "[$(date)] Profile script starting..." >/tmp/install.log
+    if [ -f ${script_path} ]; then
+        echo "[$(date)] Installation script found at ${script_path}" >>/tmp/install.log
+        export DEBUG=$DEBUG
+        echo "[$(date)] Debug level: $DEBUG" >>/tmp/install.log
+        echo "Starting automatic installation..."
+        echo "You can find documentation in /root/custom/README.md"
+        sleep 2
         
-        # Run directly in the current shell
-        exec ${script_path}
+        # Create a flag file to prevent multiple runs
+        if [ ! -f /tmp/.install_started ]; then
+            echo "[$(date)] Creating install flag file" >>/tmp/install.log
+            touch /tmp/.install_started
+            
+            # Check script permissions
+            ls -l ${script_path} >>/tmp/install.log 2>&1
+            
+            echo "[$(date)] Executing installation script" >>/tmp/install.log
+            # Run directly in the current shell
+            exec ${script_path}
+        else
+            echo "[$(date)] Install already started flag found" >>/tmp/install.log
+        fi
+    else
+        echo "[$(date)] Installation script not found!" >>/tmp/install.log
+        ls -l /root/custom/install/ >>/tmp/install.log 2>&1
     fi
-fi
+) 2>>/tmp/install.log
 EOF
 
 # Add additional packages
