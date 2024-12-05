@@ -1,44 +1,104 @@
 #!/bin/bash
-set -x  # Enable debug output
 
-echo "Installation script starting..."
-echo "Current directory: $(pwd)"
-echo "Current user: $(whoami)"
-echo "Environment variables:"
-env
+# Debug control
+DEBUG=${DEBUG:-0}
+if [ "$DEBUG" -eq 1 ]; then
+    set -x
+else
+    exec 1>/dev/null 2>&1  # Redirect all output to /dev/null unless DEBUG=1
+fi
+
+# Function to log messages even when debug is off
+log_msg() {
+    echo "$@" >&2
+}
 
 # At the beginning of the script, add:
 clear
-echo "Welcome to Automated Arch Linux Installation"
-echo "============================================"
+log_msg "Welcome to Automated Arch Linux Installation"
+log_msg "============================================"
 sleep 2
 
 # Function to prompt for disk type
 prompt_for_disk_type() {
     echo -e "\nDetected storage devices:"
     echo "------------------------"
-    # Show storage controllers
-    lspci | grep -i 'storage\|sata\|nvme' || echo "No storage controllers detected"
-    echo -e "\nAvailable disks:"
-    lsblk -o NAME,SIZE,TYPE,MODEL || echo "No disks detected"
+    
+    # Show storage controllers with better formatting
+    echo "Storage Controllers:"
+    echo "-------------------"
+    if lspci | grep -i 'storage\|sata\|nvme\|virtio'; then
+        lspci | grep -i 'storage\|sata\|nvme\|virtio' | while read -r line; do
+            if echo "$line" | grep -qi 'nvme'; then
+                echo "✓ NVMe controller detected: $line"
+            elif echo "$line" | grep -qi 'sata\|ide'; then
+                echo "✓ SATA/IDE controller detected: $line"
+            elif echo "$line" | grep -qi 'virtio'; then
+                echo "✓ Virtio controller detected: $line"
+            else
+                echo "- Other storage controller: $line"
+            fi
+        done
+    else
+        echo "No storage controllers detected"
+    fi
+    
+    # Show available disks with type identification
+    echo -e "\nAvailable Disks:"
+    echo "---------------"
+    echo "Type    Device     Size   Model"
+    lsblk -d -o NAME,SIZE,TYPE,MODEL | grep -v "loop\|sr" | while read -r name size type model; do
+        if [[ $name == "NAME" ]]; then
+            continue
+        fi
+        
+        device="/dev/$name"
+        if echo "$name" | grep -q "^nvme"; then
+            echo "NVMe    $device  $size  $model"
+        elif echo "$name" | grep -q "^vd"; then
+            echo "Virtio  $device  $size  $model"
+        else
+            echo "SATA    $device  $size  $model"
+        fi
+    done
+    
+    # Add disk type recommendation
+    echo -e "\nRecommended Selection:"
+    if systemd-detect-virt -q; then
+        echo "→ Select option 3 (Virtio) - Virtual machine detected"
+    elif lsblk -d | grep -q "^nvme"; then
+        echo "→ Select option 2 (NVMe) - NVMe drives detected"
+    elif lsblk -d | grep -q "^sd"; then
+        echo "→ Select option 1 (SATA/IDE) - SATA drives detected"
+    else
+        echo "! No standard drives detected"
+    fi
     echo "------------------------"
     
     while true; do
-        echo "Select disk type:"
+        echo -e "\nSelect disk type:"
         echo "1) SATA/IDE (e.g., /dev/sda)"
         echo "2) NVMe (e.g., /dev/nvme0n1)"
+        echo "3) Virtio (e.g., /dev/vda)"
         read -p "Enter the number corresponding to your disk type: " DISK_TYPE
         case $DISK_TYPE in
             1) 
                 PART_SUFFIX=""
+                echo "Selected SATA/IDE disk type"
                 break
                 ;;
             2) 
                 PART_SUFFIX="p"
+                echo "Selected NVMe disk type"
+                break
+                ;;
+            3)
+                PART_SUFFIX=""
+                echo "Selected Virtio disk type"
                 break
                 ;;
             *) 
-                echo "Invalid option. Please select 1 or 2."
+                echo "Invalid option. Please select 1, 2, or 3."
                 sleep 1
                 ;;
         esac

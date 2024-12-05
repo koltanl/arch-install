@@ -11,16 +11,18 @@ SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
 VM_IP="192.168.111.111"
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
+DEBUG=0
 
 # Function to show usage
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  --refresh, -r  Redeploy VM using existing ISO without rebuilding"
-    echo "  --skip-build   Skip ISO build, use existing ISO"
-    echo "  --no-build     Skip ISO build, use existing ISO"
-    echo "  --quick        Quick redeploy without rebuilding ISO"
-    echo "  --help         Show this help message"
+    echo "  --refresh, -r     Redeploy VM using existing ISO without rebuilding"
+    echo "  --skip-build      Skip ISO build, use existing ISO"
+    echo "  --no-build       Skip ISO build, use existing ISO"
+    echo "  --quick          Quick redeploy without rebuilding ISO"
+    echo "  --debug, -d      Enable debug output for build and installation"
+    echo "  --help           Show this help message"
     exit 1
 }
 
@@ -30,6 +32,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --refresh|-r|--skip-build|--no-build|--quick)
             REBUILD_ISO=false
+            shift
+            ;;
+        --debug|-d)
+            DEBUG=1
             shift
             ;;
         --help)
@@ -135,15 +141,32 @@ mkdir -p "$(dirname "$VM_DISK_PATH")"
 
 if [ "$REBUILD_ISO" = true ]; then
     echo "Building fresh ISO..."
-    ./build-iso.sh || handle_error "ISO build failed"
+    if ! DEBUG=$DEBUG ./build-iso.sh; then
+        handle_error "ISO build failed - check build-iso.sh output for details"
+    fi
+    
+    # Double check ISO exists and is valid
+    ACTUAL_ISO=$(ls -t $ISO_PATH 2>/dev/null | head -n1)
+    if [ ! -f "$ACTUAL_ISO" ] || [ ! -s "$ACTUAL_ISO" ]; then
+        handle_error "No valid ISO found after build"
+    fi
+    
+    echo "Successfully built ISO: $ACTUAL_ISO"
 else
     echo "Using existing ISO..."
 fi
 
-# Get the actual ISO path (most recent if multiple exist)
-ACTUAL_ISO=$(ls -t $ISO_PATH | head -n1)
-if [ ! -f "$ACTUAL_ISO" ]; then
-    handle_error "ISO file not found at $ACTUAL_ISO"
+# Add ISO validation before VM creation
+ACTUAL_ISO=$(ls -t $ISO_PATH 2>/dev/null | head -n1)
+if [ ! -f "$ACTUAL_ISO" ] || [ ! -s "$ACTUAL_ISO" ]; then
+    handle_error "No valid ISO found at $ISO_PATH"
+fi
+
+# Add size check
+ISO_SIZE=$(stat -c%s "$ACTUAL_ISO")
+MIN_SIZE=$((700*1024*1024))  # 700MB minimum
+if [ "$ISO_SIZE" -lt "$MIN_SIZE" ]; then
+    handle_error "ISO file appears incomplete (size: $ISO_SIZE bytes)"
 fi
 
 echo "Setting up fresh VM environment..."

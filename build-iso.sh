@@ -30,25 +30,24 @@ chmod +x ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
 chmod +x ${work_dir}/airootfs/root/custom/build-iso.sh
 chmod +x ${work_dir}/airootfs/root/custom/test-installer.sh
 
-# Update the autostart in .zprofile
+# Near the top of the file, after the variable declarations
+DEBUG=${DEBUG:-0}
+
+# Update the .zprofile modification
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF
 # Auto-start the installation script
 if [ -f ${script_path} ]; then
+    export DEBUG=$DEBUG
     echo "Starting automatic installation..."
     echo "You can find documentation in /root/custom/README.md"
     sleep 2
-    # Run in the current shell without exec
-    bash ${script_path}
-fi
-EOF
-
-# Also add a check to prevent multiple runs
-cat >>${work_dir}/airootfs/root/.bashrc <<EOF
-# Prevent multiple runs of the installation script
-if [ ! -f /tmp/.install_started ]; then
-    touch /tmp/.install_started
-    if [ -f ${script_path} ]; then
-        bash ${script_path}
+    
+    # Create a flag file to prevent multiple runs
+    if [ ! -f /tmp/.install_started ]; then
+        touch /tmp/.install_started
+        
+        # Run directly in the current shell
+        exec ${script_path}
     fi
 fi
 EOF
@@ -61,14 +60,24 @@ dialog
 cryptsetup
 gptfdisk
 reflector
-lspci
-util-linux
 pciutils
+util-linux
 mokutil
 EOF
 
 # Build the ISO
-sudo mkarchiso -v -w ${work_dir} -o ${out_dir} ${work_dir}
+if ! sudo mkarchiso -v -w ${work_dir} -o ${out_dir} ${work_dir}; then
+    echo "Error: ISO build failed"
+    sudo rm -rf ${work_dir}
+    exit 1
+fi
+
+# Verify the ISO was created successfully
+if [ ! -f "${out_dir}/archlinux-"*".iso" ]; then
+    echo "Error: ISO file not found after build"
+    sudo rm -rf ${work_dir}
+    exit 1
+fi
 
 # Clean up
 sudo rm -rf ${work_dir}
