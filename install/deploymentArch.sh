@@ -167,96 +167,6 @@ setup_pacman() {
     fi
 }
 
-# Function to setup KVM/QEMU
-setup_virtualization() {
-    echo -e "${YELLOW}Setting up KVM/QEMU virtualization...${NC}"
-    
-    # Enable multilib repository if not already enabled
-    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
-        echo -e "${YELLOW}Enabling multilib repository...${NC}"
-        sudo sh -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
-        sudo pacman -Sy
-    fi
-    
-    # Remove conflicting iptables if present
-    if pacman -Qi iptables &>/dev/null; then
-        echo -e "${YELLOW}Removing conflicting iptables package...${NC}"
-        sudo pacman -R --noconfirm iptables
-    fi
-    
-    # Install required packages
-    echo -e "${YELLOW}Installing virtualization dependencies...${NC}"
-    sudo pacman -S --needed --noconfirm \
-        qemu-full \
-        libvirt \
-        virt-manager \
-        dnsmasq \
-        iptables-nft \
-        ebtables \
-        bridge-utils \
-        openbsd-netcat \
-        lib32-gnutls \
-        lib32-libxft \
-        lib32-libpulse
-    
-    # Enable and start libvirtd service
-    sudo systemctl enable --now libvirtd.service
-    
-    # Enable default network for VMs
-    sudo virsh net-autostart default
-    sudo virsh net-start default
-    
-    # Add user to required groups
-    sudo usermod -aG libvirt,kvm,input,disk "$(whoami)"
-    
-    # Configure QEMU for better performance
-    if [ ! -f "/etc/libvirt/qemu.conf.backup" ]; then
-        sudo cp /etc/libvirt/qemu.conf /etc/libvirt/qemu.conf.backup
-    fi
-    
-    # Set security driver to none for better performance
-    sudo sed -i 's/#security_driver = "selinux"/security_driver = "none"/' /etc/libvirt/qemu.conf
-    
-    # Enable nested virtualization if AMD CPU
-    if grep -q "AMD" /proc/cpuinfo; then
-        echo "options kvm-amd nested=1" | sudo tee /etc/modprobe.d/kvm-amd.conf
-    # Enable nested virtualization if Intel CPU
-    elif grep -q "Intel" /proc/cpuinfo; then
-        echo "options kvm-intel nested=1" | sudo tee /etc/modprobe.d/kvm-intel.conf
-    fi
-    
-    # Configure SPICE for better clipboard and performance
-    if [ ! -f "/etc/libvirt/qemu.conf.backup" ]; then
-        sudo cp /etc/libvirt/qemu.conf /etc/libvirt/qemu.conf.backup
-    fi
-    
-    # Configure SPICE settings
-    sudo sed -i 's/#spice_listen = "0.0.0.0"/spice_listen = "127.0.0.1"/' /etc/libvirt/qemu.conf
-    sudo sed -i 's/#spice_password = ""/spice_password = ""/' /etc/libvirt/qemu.conf
-    
-    # Enable SPICE features
-    echo 'spice_options = "-agent-mouse=on -clipboard"' | sudo tee -a /etc/libvirt/qemu.conf
-    
-    # Ensure spice-vdagentd service is enabled
-    sudo systemctl enable --now spice-vdagentd.service
-    
-    # Create default storage pool if it doesn't exist
-    if ! sudo virsh pool-info default >/dev/null 2>&1; then
-        sudo virsh pool-define-as --name default --type dir --target /var/lib/libvirt/images
-        sudo virsh pool-build default
-        sudo virsh pool-start default
-        sudo virsh pool-autostart default
-    fi
-    
-    # Restart libvirtd to apply changes
-    sudo systemctl restart libvirtd.service
-    
-    echo -e "${GREEN}KVM/QEMU setup complete!${NC}"
-    echo -e "${YELLOW}Note: You may need to log out and back in for group changes to take effect.${NC}"
-    echo -e "${YELLOW}SPICE clipboard sharing has been configured.${NC}"
-    echo -e "${YELLOW}Remember to install spice-vdagent inside your VMs for clipboard sharing to work.${NC}"
-}
-
 # Main installation process
 main() {
     # Check if running on Arch Linux
@@ -273,22 +183,21 @@ main() {
     install_yay
     setup_pacman
     install_packages
-    setup_virtualization
     install_zplug
     install_oh_my_posh
     install_atuin
     setup_dotfiles
 
-    # Set zsh as default shell if it isn't already
-    if [ "$SHELL" != "/usr/bin/zsh" ]; then
-        echo -e "${YELLOW}Setting zsh as default shell...${NC}"
-        chsh -s /usr/bin/zsh
-    fi
-
     setup_kitty
     setup_kde
     setup_scripts
     setup_omp
+
+    # Set zsh as default shell if it isn't already
+    if [ "$SHELL" != "/usr/bin/zsh" ]; then
+        echo -e "${YELLOW}Setting zsh as default shell...${NC}"
+        sudo chsh -s /usr/bin/zsh "$USER"
+    fi
 
     # Reload KDE configurations if running
     if pgrep -x "plasmashell" > /dev/null; then

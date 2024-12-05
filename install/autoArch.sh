@@ -281,8 +281,7 @@ pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta \
     kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip \
     ffmpegthumbs kitty p7zip libreoffice-fresh "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" \
     sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups \
-    bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
-    libvirt virt-manager nano wget --noconfirm
+    bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc nano wget --noconfirm
 
 # Enable services
 systemctl enable sddm
@@ -290,17 +289,15 @@ systemctl enable NetworkManager
 systemctl enable cups
 systemctl enable bluetooth
 systemctl enable sshd
-systemctl enable libvirtd
-
-# Add user to libvirt group
-usermod -aG libvirt "${USERNAME}"
 
 # Set default shell
 chsh -s /bin/zsh "${USERNAME}"
 
 # Setup deployment script to run on first login
 echo "Setting up deployment script to run on first login..."
-cat > /home/${USERNAME}/.profile <<'EOF'
+cat >> /home/${USERNAME}/.bashrc <<'EOF'
+
+# Check for first-time deployment
 if [ ! -f "$HOME/.deployment_done" ]; then
     echo "Running first-time system deployment..."
     sudo /root/arch-install/install/deploymentArch.sh
@@ -316,8 +313,8 @@ fi
 EOF
 
 # Set proper ownership
-chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.profile
-chmod 644 /home/${USERNAME}/.profile
+chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+chmod 644 /home/${USERNAME}/.bashrc
 
 CHROOT
 
