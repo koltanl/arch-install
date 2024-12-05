@@ -1,0 +1,31 @@
+# Arch Linux Installation Configuration Template
+# Copy this file to preseed.conf and modify the values
+
+# Disk Configuration
+# DISK_TYPE: 1=SATA/IDE, 2=NVMe, 3=Virtio
+# DISK: Full path to target installation disk (e.g., /dev/sda, /dev/nvme0n1, /dev/vda)
+DISK_TYPE=3
+DISK="/dev/vda"
+
+# User Configuration
+# USERNAME: Regular user account name (lowercase letters, numbers, underscore)
+# Passwords should be changed from these defaults!
+USERNAME="archuser"
+ROOT_PASSWORD="root123"
+USER_PASSWORD="user123"
+ENCRYPTION_PASSWORD="enc123"
+
+# System Configuration
+# BOOTLOADER: "UEFI" or "BIOS"
+# PROCESSOR_TYPE: 1=Intel, 2=AMD
+# GRAPHICS_TYPE: 1=Intel, 2=AMD, 3=NVIDIA, 4=Basic, 5=Virtual Machine
+BOOTLOADER="UEFI"
+PROCESSOR_TYPE=1
+GRAPHICS_TYPE=5
+HOSTNAME="archbox"
+
+# Partition Sizes (in GB)
+ROOT_PARTITION_SIZE=20
+BOOT_PARTITION_SIZE=1
+EFI_PARTITION_SIZE=1
+SWAP_SIZE=8 
