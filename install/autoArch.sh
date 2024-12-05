@@ -300,10 +300,10 @@ chsh -s /bin/zsh "${USERNAME}"
 
 # Setup deployment script to run on first login
 echo "Setting up deployment script to run on first login..."
-cat > /home/${USERNAME}/.zprofile <<'EOF'
+cat > /home/${USERNAME}/.profile <<'EOF'
 if [ ! -f "$HOME/.deployment_done" ]; then
     echo "Running first-time system deployment..."
-    cd /root/arch-install/install && ./deploymentArch.sh
+    sudo /root/arch-install/install/deploymentArch.sh
     touch "$HOME/.deployment_done"
     # Prompt for reboot after deployment
     echo "Deployment complete. Please reboot your system."
@@ -316,8 +316,8 @@ fi
 EOF
 
 # Set proper ownership
-chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.zprofile
-chmod 644 /home/${USERNAME}/.zprofile
+chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.profile
+chmod 644 /home/${USERNAME}/.profile
 
 CHROOT
 

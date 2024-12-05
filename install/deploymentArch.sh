@@ -178,6 +178,12 @@ setup_virtualization() {
         sudo pacman -Sy
     fi
     
+    # Remove conflicting iptables if present
+    if pacman -Qi iptables &>/dev/null; then
+        echo -e "${YELLOW}Removing conflicting iptables package...${NC}"
+        sudo pacman -R --noconfirm iptables
+    fi
+    
     # Install required packages
     echo -e "${YELLOW}Installing virtualization dependencies...${NC}"
     sudo pacman -S --needed --noconfirm \
@@ -185,6 +191,7 @@ setup_virtualization() {
         libvirt \
         virt-manager \
         dnsmasq \
+        iptables-nft \
         ebtables \
         bridge-utils \
         openbsd-netcat \
