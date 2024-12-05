@@ -1,144 +1,75 @@
 # Arch Linux Installation Guide
 
-This guide explains how to use the `makeitarchinstall.sh` script to install Arch Linux.
+Custom Arch Linux installation with automated setup scripts and configurations.
+
+## What's Included
+
+- Automated installation scripts
+- KDE Plasma desktop environment
+- Development environment setup
+- Virtualization support (KVM/QEMU)
+- Custom utility scripts and configurations
+
+## Directory Structure
+```
+arch-install/
+├── install/          # Installation scripts and documentation
+├── kde/              # KDE Plasma configuration files
+├── kitty/           # Kitty terminal configuration
+├── scripts/         # Utility scripts
+├── docs/            # Additional documentation
+├── dotfiles/        # User configuration files
+└── out/             # Built ISO files
+```
 
 ## Building the ISO
 
-1. Install required packages:
+### Prerequisites
 ```bash
+# Install required packages
 sudo pacman -S archiso
 ```
 
-2. Build the ISO:
+### Build Process
+
+1. Clone the repository:
 ```bash
-./build-iso.sh
-```
-
-3. Write to USB drive:
-```bash
-sudo dd bs=4M if=out/archlinux-custom-*.iso of=/dev/sdX status=progress oflag=sync
-```
-arch-install/
-├── README.md
-├── build-iso.sh
-├── makeitarchinstall.sh
-├── out/
-│   └── archlinux-custom-[DATE].iso
-└── tree_20241204_211612.txt
-## Prerequisites
-
-- A bootable Arch Linux USB
-- Internet connection
-- Target disk or partition for installation
-
-## Pre-Installation Steps
-
-1. Boot from Arch Linux USB
-2. Verify internet connection:
-   ```bash
-   ping -c 3 archlinux.org
-   ```
-
-## Installation Process
-
-### 1. Get the Installation Files
-```bash
-# Clone the repository
 git clone https://github.com/koltanl/arch-install.git
 cd arch-install
 ```
 
-### 2. Run the Installation Script
+2. Make the build script executable:
 ```bash
-./makeitarchinstall.sh
+chmod +x build-iso.sh
 ```
 
-### 3. Script Prompts
+3. Run the build script:
+```bash
+./build-iso.sh
+```
+The script will:
+- Create a temporary build environment
+- Copy the base Arch ISO profile
+- Add our custom installation scripts
+- Include additional required packages
+- Build a custom ISO file
 
-The script will ask for several pieces of information:
+4. Write the ISO to a USB drive:
+```bash
+# Replace sdX with your USB device (e.g., sdb)
+sudo dd bs=4M if=isoout/archlinux*.iso of=/dev/sdX status=progress oflag=sync
+```
 
-- **Disk Type Selection**
-  - SATA/IDE (e.g., /dev/sda)
-  - NVMe (e.g., /dev/nvme0n1)
+> **Warning**: Be very careful with the `dd` command. Using the wrong device name can overwrite your system drive.
 
-- **Installation Target**
-  - Whole disk
-  - Specific partition (e.g., /dev/nvme0n1p4)
+### Verifying USB Device Name
+Before writing to USB:
+```bash
+# List all drives
+lsblk
 
-- **User Information**
-  - Root password
-  - Username
-  - User password
+# Or for more detailed information
+sudo fdisk -l
+```
 
-- **Encryption Password**
-  - For root partition (if using single partition)
-  - For home partition (if using whole disk)
-
-- **Bootloader Type**
-  - UEFI
-  - Legacy BIOS
-
-- **Hardware Information**
-  - Processor type (Intel/AMD)
-  - Graphics card type (Intel/AMD/Nvidia)
-
-### 4. Installation Process
-
-The script will then:
-1. Format and encrypt the selected partition(s)
-2. Install base system
-3. Configure system settings
-4. Install bootloader
-5. Set up user accounts
-
-### 5. Post-Installation
-
-After the script completes:
-1. Reboot the system
-2. Remove the installation media
-3. Log in to your new Arch Linux installation
-4. Run the post-installation script (`insidearchinstall.sh`)
-
-## Partition Layouts
-
-### Single Partition Setup
-When using a single partition:
-- Selected partition will be encrypted and used as root
-- Boot/EFI partitions created at end of disk
-- 8GB swap file created on root partition
-
-### Full Disk Setup
-When using entire disk:
-- EFI/Boot partitions (based on bootloader type)
-- 100GB root partition (ext4)
-- Remaining space for encrypted home partition (ext4)
-- 8GB swap file
-
-## Troubleshooting
-
-### Common Issues:
-1. **GRUB Installation Fails**
-   - Script attempts multiple installation methods
-   - Check EFI/BIOS settings
-
-2. **Encryption Issues**
-   - Verify password input
-   - Check if cryptsetup is working properly
-
-3. **Partition Mounting Fails**
-   - Verify partition exists
-   - Check filesystem creation success
-
-### Getting Help
-If you encounter issues:
-1. Check the error messages
-2. Verify hardware compatibility
-3. Ensure UEFI/BIOS settings are correct
-4. File an issue at https://github.com/koltanl/arch-install/issues
-
-## Notes
-
-- Backup any important data before installation
-- Ensure secure password selection
-- Note your encryption password - it cannot be recovered
-- For VMs, ensure EFI/BIOS settings match host configuration
+For detailed installation instructions, see [install/README.md](install/README.md)

@@ -1,0 +1,27 @@
+[1]
+Description=maximize kitty
+maximizehoriz=true
+maximizehorizrule=3
+maximizevert=true
+maximizevertrule=3
+wmclass=kitty
+wmclassmatch=1
+
+[1671b7ff-cad5-4dbe-a85a-927a9deb06cc]
+Description=maximize kitty
+maximizehoriz=true
+maximizehorizrule=3
+maximizevert=true
+maximizevertrule=3
+wmclass=kitty
+wmclassmatch=1
+
+[General]
+count=1
+rules=1
+
+[e27dcfc1-dcd7-4fa5-b540-131f763121d8]
+Description=Application settings for virt-manager
+wmclass=python3.12 virt-manager
+wmclasscomplete=true
+wmclassmatch=1

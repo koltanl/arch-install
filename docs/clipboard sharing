@@ -1,0 +1,19 @@
+to enable clipboard sharing on vm agent:
+
+sudo apt install spice-vdagent
+sudo pacman -S spice-vdagent
+
+
+sudo systemctl start spice-vdagentd
+sudo systemctl enable spice-vdagentd
+
+
+
+run from terminal:
+
+
+virsh --connect qemu:///system list --all
+virt-viewer --connect qemu:///system *namehere*
+
+example:
+virt-viewer --connect qemu:///system archlinux
