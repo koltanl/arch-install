@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# At the beginning of the script, add:
+clear
+echo "Welcome to Automated Arch Linux Installation"
+echo "============================================"
+sleep 2
+
 # Function to prompt for disk type
 prompt_for_disk_type() {
     echo "Select disk type:"
@@ -80,17 +86,30 @@ prompt_for_hostname() {
 }
 # Function to prompt for encryption password
 prompt_for_encryption_password() {
-    read -sp "Enter encryption password: " ENCRYPTION_PASSWORD
+    ENCRYPTION_PASSWORD=${ENCRYPTION_PASSWORD:-"changeme"}
+    read -sp "Enter encryption password [default: changeme]: " ENCRYPTION_INPUT
     echo
+    ENCRYPTION_PASSWORD=${ENCRYPTION_INPUT:-$ENCRYPTION_PASSWORD}
 }
 
 # Function to prompt for root and user passwords
 prompt_for_user_passwords() {
-    read -sp "Enter root password: " ROOT_PASSWORD
+    # You could set default values here
+    ROOT_PASSWORD=${ROOT_PASSWORD:-"changeme"}
+    USERNAME=${USERNAME:-"archuser"}
+    USER_PASSWORD=${USER_PASSWORD:-"changeme"}
+    
+    # Or still prompt interactively
+    read -p "Enter username [default: archuser]: " USERNAME_INPUT
+    USERNAME=${USERNAME_INPUT:-$USERNAME}
+    
+    read -sp "Enter root password [default: changeme]: " ROOT_PASSWORD_INPUT
     echo
-    read -p "Enter username: " USERNAME
-    read -sp "Enter user password: " USER_PASSWORD
+    ROOT_PASSWORD=${ROOT_PASSWORD_INPUT:-$ROOT_PASSWORD}
+    
+    read -sp "Enter user password [default: changeme]: " USER_PASSWORD_INPUT
     echo
+    USER_PASSWORD=${USER_PASSWORD_INPUT:-$USER_PASSWORD}
 }
 
 prompt_for_disk_type

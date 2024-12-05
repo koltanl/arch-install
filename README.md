@@ -2,6 +2,29 @@
 
 This guide explains how to use the `makeitarchinstall.sh` script to install Arch Linux.
 
+## Building the ISO
+
+1. Install required packages:
+```bash
+sudo pacman -S archiso
+```
+
+2. Build the ISO:
+```bash
+./build-iso.sh
+```
+
+3. Write to USB drive:
+```bash
+sudo dd bs=4M if=out/archlinux-custom-*.iso of=/dev/sdX status=progress oflag=sync
+```
+arch-install/
+├── README.md
+├── build-iso.sh
+├── makeitarchinstall.sh
+├── out/
+│   └── archlinux-custom-[DATE].iso
+└── tree_20241204_211612.txt
 ## Prerequisites
 
 - A bootable Arch Linux USB
