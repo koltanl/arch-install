@@ -30,14 +30,26 @@ chmod +x ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
 chmod +x ${work_dir}/airootfs/root/custom/build-iso.sh
 chmod +x ${work_dir}/airootfs/root/custom/test-installer.sh
 
-# Add autostart to .zprofile
+# Update the autostart in .zprofile
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF
 # Auto-start the installation script
 if [ -f ${script_path} ]; then
     echo "Starting automatic installation..."
     echo "You can find documentation in /root/custom/README.md"
     sleep 2
-    exec ${script_path}
+    # Run in the current shell without exec
+    bash ${script_path}
+fi
+EOF
+
+# Also add a check to prevent multiple runs
+cat >>${work_dir}/airootfs/root/.bashrc <<EOF
+# Prevent multiple runs of the installation script
+if [ ! -f /tmp/.install_started ]; then
+    touch /tmp/.install_started
+    if [ -f ${script_path} ]; then
+        bash ${script_path}
+    fi
 fi
 EOF
 

@@ -1,4 +1,11 @@
 #!/bin/bash
+set -x  # Enable debug output
+
+echo "Installation script starting..."
+echo "Current directory: $(pwd)"
+echo "Current user: $(whoami)"
+echo "Environment variables:"
+env
 
 # At the beginning of the script, add:
 clear
