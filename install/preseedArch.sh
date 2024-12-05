@@ -271,8 +271,6 @@ prompt_for_processor_and_graphics() {
                 ;;
         esac
     done
-        esac
-    done
 }
 
 # Function to prompt for disk
@@ -597,7 +595,8 @@ else
     echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
 
 
-    pacstrap /mnt base base-devel linux linux-firmware
+    echo "Installing base system..."
+    pacstrap /mnt base base-devel linux linux-firmware grub efibootmgr
 
     # Generate fstab
     echo "Generating fstab..."
@@ -691,7 +690,7 @@ EOF
             bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
             libvirt virt-manager nano wget --noconfirm
 
-        # Enable services
+        # Now enable services after packages are installed
         systemctl enable sddm
         systemctl enable NetworkManager
         systemctl enable cups
