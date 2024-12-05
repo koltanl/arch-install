@@ -6,6 +6,11 @@ VM_NAME="arch-install-test"
 ISO_PATH="$SCRIPT_DIR/isoout/archlinux-*.iso"
 VM_DISK_PATH="$HOME/.local/share/libvirt/images/$VM_NAME.qcow2"
 VM_DISK_SIZE="20"
+ROOT_PASSWORD="2312"  # Default password matching preseedArch.sh
+SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
+VM_IP="192.168.111.111"
+VM_NETWORK_NAME="arch-test-net"
+VM_NETWORK_ADDR="192.168.111.0/24"
 
 # Function to show usage
 show_usage() {
@@ -42,6 +47,8 @@ cleanup() {
     echo "Cleaning up any failed states..."
     virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
     virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
+    virsh --connect qemu:///session net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+    virsh --connect qemu:///session net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
 }
 trap cleanup ERR
 
@@ -93,6 +100,36 @@ virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
 virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
+setup_network() {
+    # Remove existing network if it exists
+    virsh --connect qemu:///session net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+    virsh --connect qemu:///session net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+
+    # Create network XML
+    cat > /tmp/network.xml <<EOF
+<network>
+  <name>$VM_NETWORK_NAME</name>
+  <bridge name='virbr111'/>
+  <forward mode='nat'/>
+  <ip address='192.168.111.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.111.2' end='192.168.111.254'/>
+      <host mac='52:54:00:11:11:11' name='$VM_NAME' ip='$VM_IP'/>
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+    # Define and start the network
+    virsh --connect qemu:///session net-define /tmp/network.xml || handle_error "Failed to define network"
+    virsh --connect qemu:///session net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
+    rm /tmp/network.xml
+}
+
+echo "Setting up VM network..."
+setup_network
+
+# Modify the virt-install command to use the custom network and MAC address
 virt-install \
     --connect qemu:///session \
     --name "$VM_NAME" \
@@ -102,12 +139,11 @@ virt-install \
     --os-variant archlinux \
     --cdrom "$ACTUAL_ISO" \
     --boot uefi \
-    --network network=default \
-    --graphics spice,listen=none \
-    --video vga \
-    --channel spicevmc \
-    --noreboot \
-    --noautoconsole || handle_error "Failed to create VM"
+    --network network=$VM_NETWORK_NAME,mac=52:54:00:11:11:11 \
+    --graphics spice \
+    --noautoconsole \
+    --features smm=on \
+    --machine q35 || handle_error "Failed to create VM"
 
 echo "
 -------------------------------------------------------------------------------
@@ -135,6 +171,15 @@ for i in {1..30}; do
     IP=$(virsh --connect qemu:///session domifaddr "$VM_NAME" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" || true)
     if [ ! -z "$IP" ]; then
         echo "VM IP address: $IP"
+        
+        # Wait for SSH connection
+        if wait_for_ssh "$IP" "$ROOT_PASSWORD" "$SSH_TIMEOUT"; then
+            echo "VM is ready for testing!"
+            echo "You can connect to the VM using:"
+            echo "    sshpass -p '$ROOT_PASSWORD' ssh root@$IP"
+            echo "Or view the console with:"
+            echo "    virt-viewer --connect qemu:///session $VM_NAME"
+        fi
         break
     fi
     echo -n "."
@@ -142,5 +187,5 @@ for i in {1..30}; do
 done
 
 if [ -z "$IP" ]; then
-    echo "Warning: Could not determine VM IP address after 60 seconds"
+    handle_error "Could not determine VM IP address after 60 seconds"
 fi 
