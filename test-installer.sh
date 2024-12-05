@@ -60,6 +60,7 @@ virsh undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
 virt-install \
+    --connect qemu:///session \
     --name "$VM_NAME" \
     --memory 4096 \
     --vcpus 2 \
@@ -67,8 +68,11 @@ virt-install \
     --os-variant archlinux \
     --cdrom "$ACTUAL_ISO" \
     --boot uefi \
-    --network bridge=virbr0 \
-    --graphics spice \
+    --network network=default \
+    --graphics spice,listen=none \
+    --video qxl \
+    --channel spicevmc \
+    --noreboot \
     --noautoconsole || handle_error "Failed to create VM"
 
 echo "
@@ -76,11 +80,11 @@ echo "
 VM '$VM_NAME' has been created and is booting from the test ISO.
 
 To connect to the VM console:
-    virt-viewer $VM_NAME
+    virt-viewer --connect qemu:///session $VM_NAME
 
 To destroy the test VM:
-    virsh destroy $VM_NAME
-    virsh undefine $VM_NAME --remove-all-storage
+    virsh --connect qemu:///session destroy $VM_NAME
+    virsh --connect qemu:///session undefine $VM_NAME --remove-all-storage
 
 The VM is configured with:
 - 4GB RAM
@@ -94,7 +98,7 @@ The VM is configured with:
 # Optional: Wait for VM to get an IP address
 echo "Waiting for VM to obtain IP address..."
 for i in {1..30}; do
-    IP=$(virsh domifaddr "$VM_NAME" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" || true)
+    IP=$(virsh --connect qemu:///session domifaddr "$VM_NAME" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" || true)
     if [ ! -z "$IP" ]; then
         echo "VM IP address: $IP"
         break

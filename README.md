@@ -98,7 +98,7 @@ The test script will:
 The test VM is configured with:
 - 4GB RAM
 - 2 CPU cores
-- 50GB disk
+- 20GB disk
 - UEFI boot
 - SPICE display
 
