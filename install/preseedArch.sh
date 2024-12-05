@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Add these lines at the very start of preseedArch.sh, before the shebang
+echo "[$(date)] Script started" >/tmp/preseed.log
+echo "[$(date)] Current permissions: $(stat -c '%a' $0)" >>/tmp/preseed.log
+echo "[$(date)] Current user: $(whoami)" >>/tmp/preseed.log
+echo "[$(date)] Current directory: $(pwd)" >>/tmp/preseed.log
+
 # Debug control
 DEBUG=${DEBUG:-0}
 if [ "$DEBUG" -eq 1 ]; then
@@ -27,7 +33,7 @@ prompt_for_disk_type() {
     # Show storage controllers with better formatting
     echo "Storage Controllers:"
     echo "-------------------"
-    if lspci | grep -i 'storage\|sata\|nvme\|virtio'; then
+    if systemd-detect-virt -q; then
         lspci | grep -i 'storage\|sata\|nvme\|virtio' | while read -r line; do
             if echo "$line" | grep -qi 'nvme'; then
                 echo "✓ NVMe controller detected: $line"
@@ -107,38 +113,37 @@ prompt_for_disk_type() {
 
 # Function to prompt for bootloader type
 prompt_for_bootloader() {
-    echo -e "\nSystem boot information:"
+    echo -e "\nSystem Boot Configuration:"
     echo "------------------------"
-    # Check if we're in a VM
-    systemd-detect-virt > /dev/null 2>&1
-    IS_VM=$?
-    if [ $IS_VM -eq 0 ]; then
-        echo "Running in virtual machine: $(systemd-detect-virt)"
-    else
-        echo "Running on physical hardware"
-    fi
     
     # Check for UEFI
     if [ -d "/sys/firmware/efi" ]; then
-        echo "UEFI boot detected"
-        echo "Secure Boot: $(mokutil --sb-state 2>/dev/null || echo 'unknown')"
+        echo "✓ UEFI boot mode detected"
+        SECURE_BOOT_STATUS=$(mokutil --sb-state 2>/dev/null || echo 'unknown')
+        if [ "$SECURE_BOOT_STATUS" != "unknown" ]; then
+            echo "→ Secure Boot: $SECURE_BOOT_STATUS"
+        fi
+        echo "→ Recommended: UEFI (option 1)"
     else
-        echo "Legacy BIOS boot detected"
+        echo "✓ Legacy BIOS mode detected"
+        echo "→ Recommended: Legacy BIOS (option 2)"
     fi
     echo "------------------------"
     
     while true; do
-        echo "Select bootloader type:"
-        echo "1) UEFI"
-        echo "2) Legacy BIOS"
-        read -p "Enter the number corresponding to your bootloader type: " BOOTLOADER_TYPE
+        echo -e "\nSelect bootloader type:"
+        echo "1) UEFI     (Modern systems, recommended if available)"
+        echo "2) Legacy   (Older systems, use only if UEFI is unavailable)"
+        read -p "Enter selection [1/2]: " BOOTLOADER_TYPE
         case $BOOTLOADER_TYPE in
             1) 
                 BOOTLOADER="UEFI"
+                echo "Selected: UEFI bootloader"
                 break
                 ;;
             2) 
                 BOOTLOADER="BIOS"
+                echo "Selected: Legacy BIOS bootloader"
                 break
                 ;;
             *) 
@@ -151,28 +156,64 @@ prompt_for_bootloader() {
 
 # Function to prompt for processor and graphics type
 prompt_for_processor_and_graphics() {
-    echo -e "\nSystem hardware information:"
+    echo -e "\nHardware Detection:"
     echo "------------------------"
-    echo "CPU Information:"
-    lscpu | grep -E "Model name|Vendor ID" || echo "CPU information unavailable"
     
-    echo -e "\nGraphics Information:"
-    lspci | grep -i 'vga\|3d\|display' || echo "No graphics hardware detected"
+    # CPU Detection
+    CPU_VENDOR=$(grep -m1 'vendor_id' /proc/cpuinfo | awk '{print $3}')
+    CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^[ \t]*//')
+    echo "CPU Information:"
+    echo "→ $CPU_MODEL"
+    
+    # Recommend CPU type based on detection
+    case $CPU_VENDOR in
+        *Intel*|*intel*)
+            echo "→ Recommended: Intel (option 1)"
+            DEFAULT_CPU=1
+            ;;
+        *AMD*|*amd*)
+            echo "→ Recommended: AMD (option 2)"
+            DEFAULT_CPU=2
+            ;;
+        *)
+            echo "→ CPU vendor not detected"
+            DEFAULT_CPU=0
+            ;;
+    esac
+    
+    # Graphics Detection
+    echo -e "\nGraphics Hardware:"
+    if lspci | grep -i 'vga\|3d\|display' | grep -qi 'intel'; then
+        echo "→ Intel Graphics detected (option 1)"
+        DEFAULT_GPU=1
+    elif lspci | grep -i 'vga\|3d\|display' | grep -qi 'amd\|ati'; then
+        echo "→ AMD Graphics detected (option 2)"
+        DEFAULT_GPU=2
+    elif lspci | grep -i 'vga\|3d\|display' | grep -qi 'nvidia'; then
+        echo "→ NVIDIA Graphics detected (option 3)"
+        DEFAULT_GPU=3
+    else
+        echo "→ No dedicated graphics detected"
+        DEFAULT_GPU=4
+    fi
     echo "------------------------"
     
     # Processor selection
     while true; do
-        echo "Select processor type for ucode:"
+        echo -e "\nSelect processor type for microcode updates:"
         echo "1) Intel"
         echo "2) AMD"
-        read -p "Enter the number corresponding to your processor type: " PROCESSOR_TYPE
+        read -p "Enter selection [1/2] (detected: $DEFAULT_CPU): " PROCESSOR_TYPE
+        PROCESSOR_TYPE=${PROCESSOR_TYPE:-$DEFAULT_CPU}
         case $PROCESSOR_TYPE in
             1) 
                 PROCESSOR_UCODE="intel-ucode"
+                echo "Selected: Intel microcode"
                 break
                 ;;
             2) 
                 PROCESSOR_UCODE="amd-ucode"
+                echo "Selected: AMD microcode"
                 break
                 ;;
             *) 
@@ -184,31 +225,36 @@ prompt_for_processor_and_graphics() {
 
     # Graphics selection
     while true; do
-        echo "Select graphics type:"
-        echo "1) Intel"
-        echo "2) AMD"
-        echo "3) Nvidia"
-        echo "4) None"
-        read -p "Enter the number corresponding to your graphics type: " GRAPHICS_TYPE
+        echo -e "\nSelect graphics driver:"
+        echo "1) Intel    (Open source, good performance)"
+        echo "2) AMD      (Open source, good performance)"
+        echo "3) NVIDIA   (Proprietary, best for NVIDIA cards)"
+        echo "4) None     (Basic display driver)"
+        read -p "Enter selection [1-4] (detected: $DEFAULT_GPU): " GRAPHICS_TYPE
+        GRAPHICS_TYPE=${GRAPHICS_TYPE:-$DEFAULT_GPU}
         case $GRAPHICS_TYPE in
             1) 
-                GRAPHICS_DRIVER="mesa"
+                GRAPHICS_DRIVER="mesa libva-intel-driver intel-media-driver"
+                echo "Selected: Intel graphics drivers"
                 break
                 ;;
             2) 
-                GRAPHICS_DRIVER="mesa"
+                GRAPHICS_DRIVER="mesa libva-mesa-driver mesa-vdpau"
+                echo "Selected: AMD graphics drivers"
                 break
                 ;;
             3) 
-                GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia xorg-server-devel"
+                GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia"
+                echo "Selected: NVIDIA graphics drivers"
                 break
                 ;;
             4) 
-                GRAPHICS_DRIVER=""
+                GRAPHICS_DRIVER="xf86-video-vesa"
+                echo "Selected: Basic display driver"
                 break
                 ;;
             *) 
-                echo "Invalid option. Please select 1, 2, 3, or 4."
+                echo "Invalid option. Please select 1-4."
                 sleep 1
                 ;;
         esac
@@ -263,35 +309,115 @@ prompt_for_disk() {
         fi
     done
 }
+
+# Function to prompt for hostname
 prompt_for_hostname() {
-    read -p "Enter your desired hostname: " HOSTNAME
-}
-# Function to prompt for encryption password
-prompt_for_encryption_password() {
-    ENCRYPTION_PASSWORD=${ENCRYPTION_PASSWORD:-"changeme"}
-    read -sp "Enter encryption password [default: changeme]: " ENCRYPTION_INPUT
-    echo
-    ENCRYPTION_PASSWORD=${ENCRYPTION_INPUT:-$ENCRYPTION_PASSWORD}
+    echo -e "\nHostname Configuration:"
+    echo "------------------------"
+    echo "The hostname is your computer's network name."
+    echo "Requirements:"
+    echo "→ Use only letters, numbers, and hyphens"
+    echo "→ Start and end with a letter or number"
+    echo "→ Maximum length: 63 characters"
+    echo "------------------------"
+    
+    while true; do
+        read -p "Enter hostname: " HOSTNAME
+        # Validate hostname
+        if [[ $HOSTNAME =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$ ]]; then
+            echo "Hostname set to: $HOSTNAME"
+            break
+        else
+            echo "Invalid hostname. Please follow the requirements above."
+        fi
+    done
 }
 
-# Function to prompt for root and user passwords
+# Function to prompt for encryption password
+prompt_for_encryption_password() {
+    echo -e "\nDisk Encryption Setup:"
+    echo "------------------------"
+    echo "Your disk encryption password:"
+    echo "→ Should be at least 8 characters"
+    echo "→ Mix of letters, numbers, and symbols recommended"
+    echo "→ Will be required at every boot"
+    echo "------------------------"
+    
+    while true; do
+        read -sp "Enter encryption password: " ENCRYPTION_PASSWORD
+        echo
+        read -sp "Confirm encryption password: " ENCRYPTION_CONFIRM
+        echo
+        
+        if [ ${#ENCRYPTION_PASSWORD} -lt 8 ]; then
+            echo "Password too short! Minimum 8 characters required."
+            continue
+        elif [ "$ENCRYPTION_PASSWORD" != "$ENCRYPTION_CONFIRM" ]; then
+            echo "Passwords do not match! Please try again."
+            continue
+        else
+            echo "Encryption password set successfully."
+            break
+        fi
+    done
+}
+
+# Function to prompt for user passwords
 prompt_for_user_passwords() {
-    # You could set default values here
-    ROOT_PASSWORD=${ROOT_PASSWORD:-"changeme"}
-    USERNAME=${USERNAME:-"archuser"}
-    USER_PASSWORD=${USER_PASSWORD:-"changeme"}
+    echo -e "\nUser Account Setup:"
+    echo "------------------------"
+    echo "Creating system accounts:"
+    echo "1. Root (administrator) account"
+    echo "2. Regular user account"
+    echo "------------------------"
     
-    # Or still prompt interactively
-    read -p "Enter username [default: archuser]: " USERNAME_INPUT
-    USERNAME=${USERNAME_INPUT:-$USERNAME}
+    # Username setup
+    while true; do
+        read -p "Enter username (letters, numbers, underscore only): " USERNAME
+        if [[ $USERNAME =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            break
+        else
+            echo "Invalid username format. Please use only lowercase letters, numbers, and underscore."
+        fi
+    done
     
-    read -sp "Enter root password [default: changeme]: " ROOT_PASSWORD_INPUT
-    echo
-    ROOT_PASSWORD=${ROOT_PASSWORD_INPUT:-$ROOT_PASSWORD}
+    # Root password
+    while true; do
+        read -sp "Enter root password: " ROOT_PASSWORD
+        echo
+        read -sp "Confirm root password: " ROOT_CONFIRM
+        echo
+        
+        if [ ${#ROOT_PASSWORD} -lt 6 ]; then
+            echo "Root password too short! Minimum 6 characters required."
+            continue
+        elif [ "$ROOT_PASSWORD" != "$ROOT_CONFIRM" ]; then
+            echo "Root passwords do not match! Please try again."
+            continue
+        else
+            echo "Root password set successfully."
+            break
+        fi
+    done
     
-    read -sp "Enter user password [default: changeme]: " USER_PASSWORD_INPUT
-    echo
-    USER_PASSWORD=${USER_PASSWORD_INPUT:-$USER_PASSWORD}
+    # User password
+    while true; do
+        read -sp "Enter password for $USERNAME: " USER_PASSWORD
+        echo
+        read -sp "Confirm password for $USERNAME: " USER_CONFIRM
+        echo
+        
+        if [ ${#USER_PASSWORD} -lt 6 ]; then
+            echo "User password too short! Minimum 6 characters required."
+            continue
+        elif [ "$USER_PASSWORD" != "$USER_CONFIRM" ]; then
+            echo "User passwords do not match! Please try again."
+            continue
+        else
+            echo "User password set successfully."
+            break
+        fi
+    done
 }
 
 prompt_for_disk_type
@@ -300,6 +426,7 @@ prompt_for_user_passwords
 prompt_for_encryption_password
 prompt_for_bootloader
 prompt_for_processor_and_graphics
+prompt_for_hostname
 
 
 # Clean the disk to remove existing filesystems

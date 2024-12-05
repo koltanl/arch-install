@@ -24,45 +24,49 @@ cp -r "${SCRIPT_DIR}"/* ${work_dir}/airootfs/root/custom/
 rm -rf ${work_dir}/airootfs/root/custom/isoout
 rm -rf ${work_dir}/airootfs/root/custom/work
 
-# Ensure scripts are executable
-chmod +x ${work_dir}/airootfs/root/custom/install/preseedArch.sh
-chmod +x ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
-chmod +x ${work_dir}/airootfs/root/custom/build-iso.sh
-chmod +x ${work_dir}/airootfs/root/custom/test-installer.sh
+# After copying files but before building ISO, update permissions
+# Update the file permissions section
+chmod 755 ${work_dir}/airootfs/root/custom/install/preseedArch.sh
+chmod 755 ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
+chmod 755 ${work_dir}/airootfs/root/custom/build-iso.sh
+chmod 755 ${work_dir}/airootfs/root/custom/test-installer.sh
+
+# Ensure root ownership and proper permissions for the entire custom directory
+chown -R root:root ${work_dir}/airootfs/root/custom
+find ${work_dir}/airootfs/root/custom -type d -exec chmod 755 {} \;
+find ${work_dir}/airootfs/root/custom -type f -exec chmod 644 {} \;
+find ${work_dir}/airootfs/root/custom -name "*.sh" -exec chmod 755 {} \;
 
 # Near the top of the file, after the variable declarations
 DEBUG=${DEBUG:-0}
 
-# Update the .zprofile modification
+# Add debug output to .zprofile to check permissions
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF
 # Auto-start the installation script
 (
-    echo "[$(date)] Profile script starting..." >/tmp/install.log
+    # More verbose debugging
+    echo "[$(date)] Starting debug checks..." >/tmp/install.log
+    
+    # Check if script exists
     if [ -f ${script_path} ]; then
-        echo "[$(date)] Installation script found at ${script_path}" >>/tmp/install.log
-        export DEBUG=$DEBUG
-        echo "[$(date)] Debug level: $DEBUG" >>/tmp/install.log
-        echo "Starting automatic installation..."
-        echo "You can find documentation in /root/custom/README.md"
-        sleep 2
+        echo "[$(date)] Script found. Checking permissions..." >>/tmp/install.log
+        ls -la ${script_path} >>/tmp/install.log 2>&1
         
-        # Create a flag file to prevent multiple runs
-        if [ ! -f /tmp/.install_started ]; then
-            echo "[$(date)] Creating install flag file" >>/tmp/install.log
-            touch /tmp/.install_started
-            
-            # Check script permissions
-            ls -l ${script_path} >>/tmp/install.log 2>&1
-            
-            echo "[$(date)] Executing installation script" >>/tmp/install.log
-            # Run directly in the current shell
-            exec ${script_path}
-        else
-            echo "[$(date)] Install already started flag found" >>/tmp/install.log
-        fi
+        # Try to make it executable again from within the environment
+        echo "[$(date)] Attempting to set permissions..." >>/tmp/install.log
+        chmod +x ${script_path} >>/tmp/install.log 2>&1
+        
+        # Check shell interpreter
+        echo "[$(date)] Checking script interpreter..." >>/tmp/install.log
+        head -n1 ${script_path} >>/tmp/install.log 2>&1
+        
+        # Try running with bash explicitly instead of exec
+        echo "[$(date)] Attempting to run script with bash..." >>/tmp/install.log
+        /bin/bash ${script_path} >>/tmp/install.log 2>&1
     else
-        echo "[$(date)] Installation script not found!" >>/tmp/install.log
-        ls -l /root/custom/install/ >>/tmp/install.log 2>&1
+        echo "[$(date)] Script not found at ${script_path}" >>/tmp/install.log
+        echo "[$(date)] Listing /root/custom/install/ directory:" >>/tmp/install.log
+        ls -la /root/custom/install/ >>/tmp/install.log 2>&1
     fi
 ) 2>>/tmp/install.log
 EOF
