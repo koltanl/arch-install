@@ -15,58 +15,108 @@ sleep 2
 
 # Function to prompt for disk type
 prompt_for_disk_type() {
-    echo "Select disk type:"
-    echo "1) SATA/IDE (e.g., /dev/sda)"
-    echo "2) NVMe (e.g., /dev/nvme0n1)"
-    read -p "Enter the number corresponding to your disk type: " DISK_TYPE
-    case $DISK_TYPE in
-        1) PART_SUFFIX="" ;;
-        2) PART_SUFFIX="p" ;;
-        *) echo "Invalid option selected. Exiting..."; exit 1 ;;
-    esac
+    while true; do
+        echo "Select disk type:"
+        echo "1) SATA/IDE (e.g., /dev/sda)"
+        echo "2) NVMe (e.g., /dev/nvme0n1)"
+        read -p "Enter the number corresponding to your disk type: " DISK_TYPE
+        case $DISK_TYPE in
+            1) 
+                PART_SUFFIX=""
+                break
+                ;;
+            2) 
+                PART_SUFFIX="p"
+                break
+                ;;
+            *) 
+                echo "Invalid option. Please select 1 or 2."
+                sleep 1
+                ;;
+        esac
+    done
 }
-
 
 # Function to prompt for bootloader type
 prompt_for_bootloader() {
-    echo "Select bootloader type:"
-    echo "1) UEFI"
-    echo "2) Legacy BIOS"
-    read -p "Enter the number corresponding to your bootloader type: " BOOTLOADER_TYPE
-    case $BOOTLOADER_TYPE in
-        1) BOOTLOADER="UEFI" ;;
-        2) BOOTLOADER="BIOS" ;;
-        *) echo "Invalid option selected. Exiting..."; exit 1 ;;
-    esac
+    while true; do
+        echo "Select bootloader type:"
+        echo "1) UEFI"
+        echo "2) Legacy BIOS"
+        read -p "Enter the number corresponding to your bootloader type: " BOOTLOADER_TYPE
+        case $BOOTLOADER_TYPE in
+            1) 
+                BOOTLOADER="UEFI"
+                break
+                ;;
+            2) 
+                BOOTLOADER="BIOS"
+                break
+                ;;
+            *) 
+                echo "Invalid option. Please select 1 or 2."
+                sleep 1
+                ;;
+        esac
+    done
 }
 
 # Function to prompt for processor and graphics type
 prompt_for_processor_and_graphics() {
-    echo "Select processor type for ucode:"
-    echo "1) Intel"
-    echo "2) AMD"
-    read -p "Enter the number corresponding to your processor type: " PROCESSOR_TYPE
-    case $PROCESSOR_TYPE in
-        1) PROCESSOR_UCODE="intel-ucode" ;;
-        2) PROCESSOR_UCODE="amd-ucode" ;;
-        *) echo "Invalid option selected. Exiting..."; exit 1 ;;
-    esac
+    # Processor selection
+    while true; do
+        echo "Select processor type for ucode:"
+        echo "1) Intel"
+        echo "2) AMD"
+        read -p "Enter the number corresponding to your processor type: " PROCESSOR_TYPE
+        case $PROCESSOR_TYPE in
+            1) 
+                PROCESSOR_UCODE="intel-ucode"
+                break
+                ;;
+            2) 
+                PROCESSOR_UCODE="amd-ucode"
+                break
+                ;;
+            *) 
+                echo "Invalid option. Please select 1 or 2."
+                sleep 1
+                ;;
+        esac
+    done
 
-    echo "Select graphics type:"
-    echo "1) Intel"
-    echo "2) AMD"
-    echo "3) Nvidia"
-    echo "4) None"
-    read -p "Enter the number corresponding to your graphics type: " GRAPHICS_TYPE
-    case $GRAPHICS_TYPE in
-        1) GRAPHICS_DRIVER="mesa" ;;
-        2) GRAPHICS_DRIVER="mesa" ;;
-        3) GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia xorg-server-devel" ;;
-        4) GRAPHICS_DRIVER="" ;;
-        *) echo "Invalid option selected. Exiting..."; exit 1 ;;
-    esac
+    # Graphics selection
+    while true; do
+        echo "Select graphics type:"
+        echo "1) Intel"
+        echo "2) AMD"
+        echo "3) Nvidia"
+        echo "4) None"
+        read -p "Enter the number corresponding to your graphics type: " GRAPHICS_TYPE
+        case $GRAPHICS_TYPE in
+            1) 
+                GRAPHICS_DRIVER="mesa"
+                break
+                ;;
+            2) 
+                GRAPHICS_DRIVER="mesa"
+                break
+                ;;
+            3) 
+                GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia xorg-server-devel"
+                break
+                ;;
+            4) 
+                GRAPHICS_DRIVER=""
+                break
+                ;;
+            *) 
+                echo "Invalid option. Please select 1, 2, 3, or 4."
+                sleep 1
+                ;;
+        esac
+    done
 }
-
 
 # Function to prompt for disk
 prompt_for_disk() {
