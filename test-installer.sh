@@ -7,11 +7,41 @@ ISO_PATH="$SCRIPT_DIR/isoout/archlinux-*.iso"
 VM_DISK_PATH="$HOME/.local/share/libvirt/images/$VM_NAME.qcow2"
 VM_DISK_SIZE="20"
 
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo "Options:"
+    echo "  --refresh, -r  Redeploy VM using existing ISO without rebuilding"
+    echo "  --skip-build   Skip ISO build, use existing ISO"
+    echo "  --no-build     Skip ISO build, use existing ISO"
+    echo "  --quick        Quick redeploy without rebuilding ISO"
+    echo "  --help         Show this help message"
+    exit 1
+}
+
+# Parse command line arguments
+REBUILD_ISO=true
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --refresh|-r|--skip-build|--no-build|--quick)
+            REBUILD_ISO=false
+            shift
+            ;;
+        --help)
+            show_usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_usage
+            ;;
+    esac
+done
+
 # Function for cleanup
 cleanup() {
     echo "Cleaning up any failed states..."
-    virsh destroy "$VM_NAME" 2>/dev/null || true
-    virsh undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
+    virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
+    virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 }
 trap cleanup ERR
 
@@ -43,8 +73,12 @@ fi
 # Create user images directory if it doesn't exist
 mkdir -p "$(dirname "$VM_DISK_PATH")"
 
-echo "Building fresh ISO..."
-./build-iso.sh || handle_error "ISO build failed"
+if [ "$REBUILD_ISO" = true ]; then
+    echo "Building fresh ISO..."
+    ./build-iso.sh || handle_error "ISO build failed"
+else
+    echo "Using existing ISO..."
+fi
 
 # Get the actual ISO path (most recent if multiple exist)
 ACTUAL_ISO=$(ls -t $ISO_PATH | head -n1)
@@ -55,8 +89,8 @@ fi
 echo "Setting up fresh VM environment..."
 
 # Remove existing VM if it exists
-virsh destroy "$VM_NAME" 2>/dev/null || true
-virsh undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
+virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
+virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
 virt-install \
@@ -70,7 +104,7 @@ virt-install \
     --boot uefi \
     --network network=default \
     --graphics spice,listen=none \
-    --video qxl \
+    --video vga \
     --channel spicevmc \
     --noreboot \
     --noautoconsole || handle_error "Failed to create VM"

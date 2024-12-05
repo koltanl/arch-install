@@ -85,12 +85,19 @@ The project includes an automated VM testing script that helps validate the inst
 # Make the test script executable
 chmod +x test-installer.sh
 
-# Run the test script
+# Full test with fresh ISO build
 ./test-installer.sh
+
+# Quick test using existing ISO (any of these options)
+./test-installer.sh --refresh
+./test-installer.sh -r
+./test-installer.sh --skip-build
+./test-installer.sh --no-build
+./test-installer.sh --quick
 ```
 
 The test script will:
-- Build a fresh ISO using build-iso.sh
+- Build a fresh ISO using build-iso.sh (unless using quick options)
 - Create a clean KVM virtual machine
 - Boot the VM from the new ISO
 - Provide connection details for testing
@@ -111,7 +118,12 @@ sudo systemctl enable --now libvirtd
 
 To connect to the test VM:
 ```bash
-virt-viewer arch-install-test
+virt-viewer --connect qemu:///session arch-install-test
 ```
 
 This testing environment allows for rapid iteration and validation of the installation process without needing physical hardware.
+
+**Quick Testing Tips:**
+- Use `--quick` or `-r` when iterating on VM-related changes
+- Use full build when testing ISO or installation script changes
+- The VM's disk image is stored in your home directory at `~/.local/share/libvirt/images/`
