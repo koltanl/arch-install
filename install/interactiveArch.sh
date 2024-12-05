@@ -559,6 +559,12 @@ usermod -aG wheel,sudo "${USERNAME}"
 echo '%wheel ALL=(ALL) ALL' >> /etc/sudoers
 echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
 
+# Add these new lines:
+# Configure passwordless sudo for wheel group
+echo "Setting up passwordless sudo..."
+echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel
+chmod 440 /etc/sudoers.d/wheel
+
 # Update mirrors and install packages
 echo "Updating mirrorlist..."
 pacman -S --needed reflector --noconfirm
@@ -618,6 +624,30 @@ usermod -aG libvirt "${USERNAME}"
 
 # Set default shell
 chsh -s /bin/zsh "${USERNAME}"
+
+# Setup deployment script to run on first login
+echo "Setting up deployment script to run on first login..."
+cat >> /home/${USERNAME}/.bashrc <<'EOF'
+
+# Check for first-time deployment
+if [ ! -f "$HOME/.deployment_done" ]; then
+    echo "Running first-time system deployment..."
+    sudo /root/arch-install/install/deploymentArch.sh
+    touch "$HOME/.deployment_done"
+    # Prompt for reboot after deployment
+    echo "Deployment complete. Please reboot your system."
+    read -p "Would you like to reboot now? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+        sudo reboot
+    fi
+fi
+EOF
+
+# Set proper ownership
+chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+chmod 644 /home/${USERNAME}/.bashrc
+
 CHROOT
 
     # Copy installation files to new system
