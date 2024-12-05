@@ -54,8 +54,7 @@ install_packages() {
     echo -e "${YELLOW}Installing packages from pkglist.txt...${NC}"
     
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install the following packages:${NC}"
-        grep -v '^#' pkglist.txt | grep -v '^$'
+        echo -e "${YELLOW}TEST MODE: Would install packages from pkglist.txt${NC}"
         return 0
     fi
     
@@ -65,26 +64,28 @@ install_packages() {
         sudo bash -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
         sudo pacman -Sy
     fi
-    
-    # First try with pacman
+
+    # Create array of packages from pkglist.txt
+    local packages=()
     while read -r package; do
         # Skip empty lines and comments
         [[ -z "$package" || "$package" =~ ^# ]] && continue
-        
-        echo -e "${YELLOW}Installing $package...${NC}"
-        sudo pacman -S --needed --noconfirm "$package" || true
+        packages+=("$package")
     done < pkglist.txt
     
-    # Then try remaining packages with yay
-    while read -r package; do
-        # Skip empty lines and comments
-        [[ -z "$package" || "$package" =~ ^# ]] && continue
+    # Install all packages in a single pacman command
+    if [ ${#packages[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Installing packages with pacman...${NC}"
+        sudo pacman -S --needed --noconfirm "${packages[@]}" || true
         
-        if ! pacman -Qi "$package" >/dev/null 2>&1; then
-            echo -e "${YELLOW}Installing $package with yay...${NC}"
-            yay -S --needed --noconfirm "$package" || true
-        fi
-    done < pkglist.txt
+        # Try remaining packages with yay
+        echo -e "${YELLOW}Installing remaining packages with yay...${NC}"
+        for package in "${packages[@]}"; do
+            if ! pacman -Qi "$package" >/dev/null 2>&1; then
+                yay -S --needed --noconfirm "$package" || true
+            fi
+        done
+    fi
 }
 
 # Function to setup dotfiles
@@ -99,6 +100,7 @@ setup_dotfiles() {
     # Create necessary directories
     mkdir -p "$HOME/.config"
     mkdir -p "$HOME/bin"
+    mkdir -p "$HOME/.local/share"  # Some apps need this
     
     # Copy dotfiles
     for file in dotfiles/.*; do
@@ -143,20 +145,21 @@ install_atuin() {
 
 # Function to setup kitty configuration
 setup_kitty() {
+    echo -e "${YELLOW}Setting up kitty terminal configuration...${NC}"
+    
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would setup kitty configuration in $HOME/.config/kitty${NC}"
-        echo -e "${YELLOW}TEST MODE: Would clone kitty-themes repository${NC}"
+        echo -e "${YELLOW}TEST MODE: Would set up kitty configuration${NC}"
         return 0
     fi
 
-    echo -e "${YELLOW}Setting up kitty terminal configuration...${NC}"
-    local kitty_config_dir="$HOME/.config/kitty"
-    mkdir -p "$kitty_config_dir"
-    
-    cp -r kitty/* "$kitty_config_dir/"
-    
-    if [ ! -d "$kitty_config_dir/kitty-themes" ]; then
-        git clone https://github.com/dexpota/kitty-themes.git "$kitty_config_dir/kitty-themes"
+    # Create kitty config directory if it doesn't exist
+    mkdir -p "$HOME/.config/kitty"
+
+    # Copy kitty configuration files
+    if [ -d "kitty" ]; then
+        cp -r kitty/* "$HOME/.config/kitty/"
+    else
+        echo -e "${RED}Warning: kitty configuration directory not found${NC}"
     fi
 }
 
@@ -164,17 +167,16 @@ setup_kitty() {
 setup_kde() {
     if [ "$TEST_MODE" = true ]; then
         echo -e "${YELLOW}TEST MODE: Would setup KDE configurations in $HOME/.config${NC}"
-        echo -e "${YELLOW}TEST MODE: Would backup existing KDE configs${NC}"
-        echo -e "${YELLOW}TEST MODE: Would copy KDE configuration files:${NC}"
-        echo "  - KWin configurations"
-        echo "  - Shortcuts"
-        echo "  - Plasma configurations"
-        echo "  - Theme configurations"
         return 0
     fi
 
     echo -e "${YELLOW}Setting up KDE configurations...${NC}"
     local kde_config_dir="$HOME/.config"
+    
+    # Create necessary directories
+    mkdir -p "$kde_config_dir"
+    mkdir -p "$kde_config_dir/kdedefaults"
+    mkdir -p "$kde_config_dir/plasma"
     
     # Backup existing configs
     if [ -d "$kde_config_dir" ]; then
@@ -220,6 +222,11 @@ setup_scripts() {
     local bin_dir="$HOME/bin"
     mkdir -p "$bin_dir"
     
+    # Create utils subdirectory if it exists in source
+    if [ -d "scripts/utils" ]; then
+        mkdir -p "$bin_dir/utils"
+    fi
+    
     cp scripts/*.sh "$bin_dir/"
     cp scripts/*.py "$bin_dir/"
     
@@ -236,6 +243,7 @@ setup_omp() {
 
     echo -e "${YELLOW}Setting up oh-my-posh configuration...${NC}"
     local config_dir="$HOME/.config"
+    mkdir -p "$config_dir"
     
     cp dotfiles/omp.json "$config_dir/"
 }

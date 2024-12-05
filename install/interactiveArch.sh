@@ -604,12 +604,9 @@ sudo -u "${USERNAME}" bash -c "
 "
 
 # Install desktop environment and utilities
-pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta \
-    kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip \
-    ffmpegthumbs kitty p7zip libreoffice-fresh "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" \
-    sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups \
-    bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
-    libvirt virt-manager nano wget --noconfirm
+pacman -S --needed sddm plasma-desktop plasma-wayland-session plasma-pa plasma-nm \
+    "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" networkmanager dhclient \
+    grub efibootmgr os-prober zsh nano wget --noconfirm
 
 # Enable services
 systemctl enable sddm
@@ -622,8 +619,6 @@ systemctl enable libvirtd
 # Add user to libvirt group
 usermod -aG libvirt "${USERNAME}"
 
-# Set default shell
-chsh -s /bin/zsh "${USERNAME}"
 
 # Setup deployment script to run on first login
 echo "Setting up deployment script to run on first login..."
