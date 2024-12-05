@@ -430,22 +430,17 @@ else
 fi
 
 # Add this after the GRUB configuration but before the final success message
-echo "Copying deployment files to new system..."
-# Get the parent directory of the current script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
-
-# Create the destination directory
+echo "Copying installation files to new system..."
 mkdir -p /mnt/root/arch-install
+cp -r /root/custom/* /mnt/root/arch-install/
 
-# Copy the entire repository to the new system
-cp -r "$REPO_ROOT"/* /mnt/root/arch-install/
-
-# Set appropriate permissions
+# Ensure scripts are executable in the new system
+chmod +x /mnt/root/arch-install/install/preseedArch.sh
 chmod +x /mnt/root/arch-install/install/deploymentArch.sh
-chown -R root:root /mnt/root/arch-install
+chmod +x /mnt/root/arch-install/build-iso.sh
+chmod +x /mnt/root/arch-install/test-installer.sh
 
-echo "Deployment files copied to /root/arch-install/"
+echo "Installation files copied to /root/arch-install/"
 echo "
 -------------------------------------------------------------------------------"
 echo "Installation complete. Please reboot your system and remove your installation boot media..."

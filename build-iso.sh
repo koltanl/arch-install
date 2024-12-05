@@ -18,12 +18,17 @@ cp -r /usr/share/archiso/configs/releng/ ${work_dir}
 # Create directory structure in ISO
 mkdir -p ${work_dir}/airootfs/root/custom
 
-# Copy our installation script and make it executable
-cp "${SCRIPT_DIR}/install/preseedArch.sh" ${work_dir}/airootfs/root/custom/
-chmod +x ${work_dir}/airootfs/root/custom/preseedArch.sh
+# Copy the entire repository to the ISO
+cp -r "${SCRIPT_DIR}"/* ${work_dir}/airootfs/root/custom/
+# Remove any build artifacts or temporary files
+rm -rf ${work_dir}/airootfs/root/custom/isoout
+rm -rf ${work_dir}/airootfs/root/custom/work
 
-# Copy README for reference
-cp "${SCRIPT_DIR}/README.md" ${work_dir}/airootfs/root/custom/
+# Ensure scripts are executable
+chmod +x ${work_dir}/airootfs/root/custom/install/preseedArch.sh
+chmod +x ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
+chmod +x ${work_dir}/airootfs/root/custom/build-iso.sh
+chmod +x ${work_dir}/airootfs/root/custom/test-installer.sh
 
 # Add autostart to .zprofile
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF

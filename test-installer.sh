@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_NAME="arch-install-test"
 ISO_PATH="$SCRIPT_DIR/isoout/archlinux-*.iso"
-VM_DISK_PATH="/var/lib/libvirt/images/$VM_NAME.qcow2"
-VM_DISK_SIZE="50G"
+VM_DISK_PATH="$HOME/.local/share/libvirt/images/$VM_NAME.qcow2"
+VM_DISK_SIZE="20"
 
 # Function for cleanup
 cleanup() {
@@ -26,11 +26,22 @@ handle_error() {
 command -v virt-install >/dev/null 2>&1 || handle_error "virt-install is required. Install with: sudo pacman -S virt-install"
 command -v virsh >/dev/null 2>&1 || handle_error "virsh is required. Install with: sudo pacman -S libvirt"
 
+# Ensure user is in libvirt group
+if ! groups | grep -q libvirt; then
+    echo "Adding user to libvirt group..."
+    sudo usermod -aG libvirt "$USER"
+    echo "Please log out and back in for group changes to take effect"
+    exit 1
+fi
+
 # Ensure libvirtd is running
 if ! systemctl is-active --quiet libvirtd; then
     echo "Starting libvirtd service..."
     sudo systemctl start libvirtd || handle_error "Failed to start libvirtd"
 fi
+
+# Create user images directory if it doesn't exist
+mkdir -p "$(dirname "$VM_DISK_PATH")"
 
 echo "Building fresh ISO..."
 ./build-iso.sh || handle_error "ISO build failed"
@@ -52,7 +63,7 @@ virt-install \
     --name "$VM_NAME" \
     --memory 4096 \
     --vcpus 2 \
-    --disk path="$VM_DISK_PATH",size=50,format=qcow2 \
+    --disk path="$VM_DISK_PATH",size="$VM_DISK_SIZE",format=qcow2 \
     --os-variant archlinux \
     --cdrom "$ACTUAL_ISO" \
     --boot uefi \
@@ -74,7 +85,7 @@ To destroy the test VM:
 The VM is configured with:
 - 4GB RAM
 - 2 CPU cores
-- 50GB disk
+- 20GB disk
 - UEFI boot
 - SPICE display
 -------------------------------------------------------------------------------

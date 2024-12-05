@@ -74,3 +74,44 @@ sudo fdisk -l
 ```
 
 For detailed installation instructions, see [install/README.md](install/README.md)
+
+## Testing the Installation
+
+### Using the VM Tester
+
+The project includes an automated VM testing script that helps validate the installation process:
+
+```bash
+# Make the test script executable
+chmod +x test-installer.sh
+
+# Run the test script
+./test-installer.sh
+```
+
+The test script will:
+- Build a fresh ISO using build-iso.sh
+- Create a clean KVM virtual machine
+- Boot the VM from the new ISO
+- Provide connection details for testing
+
+The test VM is configured with:
+- 4GB RAM
+- 2 CPU cores
+- 50GB disk
+- UEFI boot
+- SPICE display
+
+**Prerequisites:**
+```bash
+# Install required packages
+sudo pacman -S virt-install libvirt
+sudo systemctl enable --now libvirtd
+```
+
+To connect to the test VM:
+```bash
+virt-viewer arch-install-test
+```
+
+This testing environment allows for rapid iteration and validation of the installation process without needing physical hardware.
