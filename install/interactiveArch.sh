@@ -792,3 +792,24 @@ echo "Installation files copied to /root/arch-install/"
 echo "
 -------------------------------------------------------------------------------"
 echo "Installation complete. Please reboot your system and remove your installation boot media..."
+
+# After setting up encryption
+echo "Configuring encryption support..."
+
+# Add encryption modules to mkinitcpio.conf
+arch-chroot /mnt sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
+
+# Get the UUID of the encrypted partition
+CRYPT_UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}4)
+
+# Configure crypttab
+echo "cryptroot UUID=${CRYPT_UUID} none luks" > /mnt/etc/crypttab
+
+# Update GRUB configuration for encryption
+arch-chroot /mnt sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${CRYPT_UUID}':cryptroot root=\/dev\/mapper\/cryptroot"/' /etc/default/grub
+
+# Regenerate initramfs
+arch-chroot /mnt mkinitcpio -P
+
+# Regenerate GRUB config
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg

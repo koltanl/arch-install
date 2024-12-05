@@ -68,12 +68,11 @@ main() {
         log_msg "Starting interactive installation..."
         source /root/custom/install/interactiveArch.sh
     fi
-    
-    # After successful installation, run deployment script if it exists
-    if [ -f "/root/custom/install/deploymentArch.sh" ]; then
-        log_msg "Running post-installation deployment..."
-        bash /root/custom/install/deploymentArch.sh
-    fi
+    echo "================================="
+    echo "Installation complete!"
+    echo "Please remove your installation media and reboot your system."
+    echo "You can reboot now by typing 'reboot' and pressing Enter."
+    echo "================================="
 }
 
 # Run main function
