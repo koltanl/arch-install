@@ -14,16 +14,22 @@ else
     set +x  # Explicitly disable debug mode
 fi
 
-# Function to log messages even when debug is off
-log_msg() {
-    echo "$@" >&2
-}
+# Partition size configurations (in GB)
+ROOT_PARTITION_SIZE=20
+BOOT_PARTITION_SIZE=1
+EFI_PARTITION_SIZE=1
+SWAP_SIZE=8  # Size in GB for swap file
 
 # At the beginning of the script, add:
 clear
 log_msg "Welcome to Automated Arch Linux Installation"
 log_msg "============================================"
 sleep 2
+
+# Function to log messages even when debug is off
+log_msg() {
+    echo "$@" >&2
+}
 
 # Function to prompt for disk type
 prompt_for_disk_type() {
@@ -230,7 +236,8 @@ prompt_for_processor_and_graphics() {
         echo "2) AMD      (Open source, good performance)"
         echo "3) NVIDIA   (Proprietary, best for NVIDIA cards)"
         echo "4) None     (Basic display driver)"
-        read -p "Enter selection [1-4] (detected: $DEFAULT_GPU): " GRAPHICS_TYPE
+        echo "5) Virtual Machine (Best for VM environments)"
+        read -p "Enter selection [1-5] (detected: $DEFAULT_GPU): " GRAPHICS_TYPE
         GRAPHICS_TYPE=${GRAPHICS_TYPE:-$DEFAULT_GPU}
         case $GRAPHICS_TYPE in
             1) 
@@ -253,10 +260,17 @@ prompt_for_processor_and_graphics() {
                 echo "Selected: Basic display driver"
                 break
                 ;;
+            5)
+                GRAPHICS_DRIVER="xf86-video-qxl"
+                echo "Selected: Virtual Machine graphics driver"
+                break
+                ;;
             *) 
-                echo "Invalid option. Please select 1-4."
+                echo "Invalid option. Please select 1-5."
                 sleep 1
                 ;;
+        esac
+    done
         esac
     done
 }
@@ -388,7 +402,7 @@ prompt_for_user_passwords() {
         read -sp "Confirm root password: " ROOT_CONFIRM
         echo
         
-        if [ ${#ROOT_PASSWORD} -lt 6 ]; then
+        if [ ${#ROOT_PASSWORD} -lt 4 ]; then
             echo "Root password too short! Minimum 6 characters required."
             continue
         elif [ "$ROOT_PASSWORD" != "$ROOT_CONFIRM" ]; then
@@ -407,7 +421,7 @@ prompt_for_user_passwords() {
         read -sp "Confirm password for $USERNAME: " USER_CONFIRM
         echo
         
-        if [ ${#USER_PASSWORD} -lt 6 ]; then
+        if [ ${#USER_PASSWORD} -lt 4 ]; then
             echo "User password too short! Minimum 6 characters required."
             continue
         elif [ "$USER_PASSWORD" != "$USER_CONFIRM" ]; then
@@ -494,15 +508,15 @@ else
     sgdisk -o "$DISK"
 
     if [ "$BOOTLOADER" == "UEFI" ]; then
-        sgdisk -n 1:0:+1G -t 1:ef00 $DISK    # EFI System Partition
-        sgdisk -n 2:0:+2G -t 2:8300 $DISK    # Boot Partition
+        sgdisk -n 1:0:+${EFI_PARTITION_SIZE}G -t 1:ef00 $DISK    # EFI System Partition
+        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 $DISK    # Boot Partition
     else
         sgdisk -n 1:0:+1M -t 1:ef02 $DISK    # BIOS boot partition
-        sgdisk -n 2:0:+2G -t 2:8300 $DISK    # Boot Partition
+        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 $DISK    # Boot Partition
     fi
 
-    sgdisk -n 3:0:+100G -t 3:8300 $DISK   # Root (increased to 100GB)
-    sgdisk -n 4:0:0 -t 4:8300 $DISK      # Home
+    sgdisk -n 3:0:+${ROOT_PARTITION_SIZE}G -t 3:8300 $DISK   # Root partition
+    sgdisk -n 4:0:0 -t 4:8300 $DISK      # Home (uses remaining space)
 fi
 
 
@@ -574,7 +588,7 @@ else
 
     # Create and enable swap file (after mounting root)
     echo "Creating swap file..."
-    dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192    # 8GB swap file
+    dd if=/dev/zero of=/mnt/swapfile bs=1M count=$((SWAP_SIZE * 1024))    # Convert GB to MB
     chmod 600 /mnt/swapfile
     mkswap /mnt/swapfile
     swapon /mnt/swapfile
