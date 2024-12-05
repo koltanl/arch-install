@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work_dir="/tmp/archiso-custom"
 out_dir="${SCRIPT_DIR}/isoout"
-script_path="/root/custom/preseedArch.sh"
+script_path="/root/custom/install/preseedArch.sh"
 
 # Clean up previous builds
 sudo rm -rf ${work_dir}
@@ -37,7 +37,7 @@ if [ -f ${script_path} ]; then
     echo "Starting automatic installation..."
     echo "You can find documentation in /root/custom/README.md"
     sleep 2
-    ${script_path}
+    exec ${script_path}
 fi
 EOF
 

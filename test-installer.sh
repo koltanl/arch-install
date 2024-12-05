@@ -45,12 +45,65 @@ done
 # Function for cleanup
 cleanup() {
     echo "Cleaning up any failed states..."
-    virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
-    virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
-    virsh --connect qemu:///session net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
-    virsh --connect qemu:///session net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+    
+    # List of possible VM states to check and clean
+    local VM_STATES=("running" "paused" "shut off")
+    
+    # Check each possible state and handle accordingly
+    for state in "${VM_STATES[@]}"; do
+        if sudo virsh --connect qemu:///system list --all | grep -q "$VM_NAME.*$state"; then
+            echo "Found $VM_NAME in state: $state"
+            
+            # Handle running or paused states
+            if [ "$state" != "shut off" ]; then
+                echo "Shutting down VM..."
+                sudo virsh --connect qemu:///system shutdown "$VM_NAME" 2>/dev/null || true
+                sleep 2
+                # Force destroy if shutdown didn't work
+                sudo virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
+            fi
+            
+            # Undefine the VM with all storage and snapshots
+            echo "Undefining VM..."
+            sudo virsh --connect qemu:///system undefine "$VM_NAME" --remove-all-storage --snapshots-metadata --nvram 2>/dev/null || true
+        fi
+    done
+    
+    # Force cleanup network
+    echo "Cleaning up network..."
+    sudo virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+    sudo virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+    
+    # Clean up all possible disk locations
+    echo "Cleaning up disk images..."
+    local DISK_PATHS=(
+        "$VM_DISK_PATH"
+        "/var/lib/libvirt/images/${VM_NAME}.qcow2"
+        "$HOME/.local/share/libvirt/images/${VM_NAME}.qcow2"
+        "/var/lib/libvirt/images/default/${VM_NAME}.qcow2"
+    )
+    
+    for disk in "${DISK_PATHS[@]}"; do
+        sudo rm -f "$disk" 2>/dev/null || true
+    done
+    
+    # Clean up lock files and NVRAM files
+    echo "Cleaning up lock and NVRAM files..."
+    sudo rm -f "/var/lib/libvirt/qemu/domain-${VM_NAME}-*/master-key.aes" 2>/dev/null || true
+    sudo rm -f "/var/lib/libvirt/qemu/nvram/${VM_NAME}_VARS.fd" 2>/dev/null || true
+    
+    # Wait for resources to be released
+    sleep 3
+    
+    echo "Cleanup completed"
 }
+
+# Ensure cleanup is called both on error and before creating new VM
 trap cleanup ERR
+
+# Add this right before creating the new VM
+echo "Ensuring clean environment before VM creation..."
+cleanup
 
 # Function to handle errors
 handle_error() {
@@ -94,19 +147,26 @@ if [ ! -f "$ACTUAL_ISO" ]; then
 fi
 
 echo "Setting up fresh VM environment..."
+cleanup  # Call cleanup before starting to ensure clean slate
 
 # Remove existing VM if it exists
-virsh --connect qemu:///session destroy "$VM_NAME" 2>/dev/null || true
-virsh --connect qemu:///session undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
+virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
+virsh --connect qemu:///system undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
 setup_network() {
-    # Remove existing network if it exists
-    virsh --connect qemu:///session net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
-    virsh --connect qemu:///session net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+    echo "Setting up VM network..."
+    
+    # Check if running as root, if not, use sudo
+    if [ "$EUID" -ne 0 ]; then
+        echo "Network setup requires root privileges..."
+        
+        # Remove existing network if it exists
+        sudo virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+        sudo virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
 
-    # Create network XML
-    cat > /tmp/network.xml <<EOF
+        # Create network XML
+        cat > /tmp/network.xml <<EOF
 <network>
   <name>$VM_NETWORK_NAME</name>
   <bridge name='virbr111'/>
@@ -120,18 +180,42 @@ setup_network() {
 </network>
 EOF
 
-    # Define and start the network
-    virsh --connect qemu:///session net-define /tmp/network.xml || handle_error "Failed to define network"
-    virsh --connect qemu:///session net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
-    rm /tmp/network.xml
+        # Define and start the network with sudo
+        sudo virsh --connect qemu:///system net-define /tmp/network.xml || handle_error "Failed to define network"
+        sudo virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
+        rm /tmp/network.xml
+    else
+        # Original commands if already root
+        virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+        virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+
+        # Create network XML
+        cat > /tmp/network.xml <<EOF
+<network>
+  <name>$VM_NETWORK_NAME</name>
+  <bridge name='virbr111'/>
+  <forward mode='nat'/>
+  <ip address='192.168.111.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.111.2' end='192.168.111.254'/>
+      <host mac='52:54:00:11:11:11' name='$VM_NAME' ip='$VM_IP'/>
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+        virsh --connect qemu:///system net-define /tmp/network.xml || handle_error "Failed to define network"
+        virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
+        rm /tmp/network.xml
+    fi
 }
 
 echo "Setting up VM network..."
 setup_network
 
-# Modify the virt-install command to use the custom network and MAC address
+# Update virt-install command
 virt-install \
-    --connect qemu:///session \
+    --connect qemu:///system \
     --name "$VM_NAME" \
     --memory 4096 \
     --vcpus 2 \
@@ -139,22 +223,17 @@ virt-install \
     --os-variant archlinux \
     --cdrom "$ACTUAL_ISO" \
     --boot uefi \
-    --network network=$VM_NETWORK_NAME,mac=52:54:00:11:11:11 \
+    --network bridge=virbr111 \
     --graphics spice \
-    --noautoconsole \
-    --features smm=on \
-    --machine q35 || handle_error "Failed to create VM"
+    --console pty,target_type=virtio \
+    --serial pty \
+    --machine q35 \
+    --check path_in_use=off \
+    --noautoconsole || handle_error "Failed to create VM"
 
 echo "
 -------------------------------------------------------------------------------
 VM '$VM_NAME' has been created and is booting from the test ISO.
-
-To connect to the VM console:
-    virt-viewer --connect qemu:///session $VM_NAME
-
-To destroy the test VM:
-    virsh --connect qemu:///session destroy $VM_NAME
-    virsh --connect qemu:///session undefine $VM_NAME --remove-all-storage
 
 The VM is configured with:
 - 4GB RAM
@@ -162,30 +241,21 @@ The VM is configured with:
 - 20GB disk
 - UEFI boot
 - SPICE display
--------------------------------------------------------------------------------
-"
 
-# Optional: Wait for VM to get an IP address
-echo "Waiting for VM to obtain IP address..."
-for i in {1..30}; do
-    IP=$(virsh --connect qemu:///session domifaddr "$VM_NAME" | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" || true)
-    if [ ! -z "$IP" ]; then
-        echo "VM IP address: $IP"
-        
-        # Wait for SSH connection
-        if wait_for_ssh "$IP" "$ROOT_PASSWORD" "$SSH_TIMEOUT"; then
-            echo "VM is ready for testing!"
-            echo "You can connect to the VM using:"
-            echo "    sshpass -p '$ROOT_PASSWORD' ssh root@$IP"
-            echo "Or view the console with:"
-            echo "    virt-viewer --connect qemu:///session $VM_NAME"
-        fi
-        break
-    fi
-    echo -n "."
-    sleep 2
-done
+Waiting for VM to initialize..."
 
-if [ -z "$IP" ]; then
-    handle_error "Could not determine VM IP address after 60 seconds"
-fi 
+# Give the VM a moment to start up
+sleep 5
+
+# Launch virt-viewer
+echo "Launching VM console..."
+virt-viewer --connect qemu:///system "$VM_NAME" &
+
+echo "
+If the console window doesn't open automatically, you can connect manually with:
+    virt-viewer --connect qemu:///system $VM_NAME
+
+To destroy the test VM when done:
+    virsh --connect qemu:///system destroy $VM_NAME
+    virsh --connect qemu:///system undefine $VM_NAME --remove-all-storage
+-------------------------------------------------------------------------------" 
