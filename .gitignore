@@ -1,2 +1,4 @@
 /out/
 /isoout/
+# Test VM artifacts
+.test-vm/

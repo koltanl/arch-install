@@ -32,6 +32,8 @@ cd arch-install/install
 ./preseedArch.sh
 ```
 
+> Note: The script will automatically copy the deployment files to `/root/arch-install` on your new system, so they'll be ready after reboot.
+
 #### Script Prompts
 
 The script will ask for:
@@ -68,9 +70,13 @@ After rebooting into your new system, run the deployment script for additional s
 ### Running deploymentArch.sh
 
 1. Log into your new system
-2. Run the deployment script:
+2. Navigate to the deployment files:
 ```bash
-./deploymentArch.sh
+cd /root/arch-install
+```
+3. Run the deployment script:
+```bash
+./install/deploymentArch.sh
 ```
 
 #### What Gets Configured

@@ -15,11 +15,11 @@ Custom Arch Linux installation with automated setup scripts and configurations.
 arch-install/
 ├── install/          # Installation scripts and documentation
 ├── kde/              # KDE Plasma configuration files
-├── kitty/           # Kitty terminal configuration
-├── scripts/         # Utility scripts
-├── docs/            # Additional documentation
-├── dotfiles/        # User configuration files
-└── out/             # Built ISO files
+├── kitty/            # Kitty terminal configuration
+├── scripts/          # Utility scripts
+├── docs/             # Additional documentation
+├── dotfiles/         # User configuration files
+└── isoout/           # Built ISO files
 ```
 
 ## Building the ISO
@@ -53,6 +53,7 @@ The script will:
 - Add our custom installation scripts
 - Include additional required packages
 - Build a custom ISO file
+- Ensure deployment files are included for post-install setup
 
 4. Write the ISO to a USB drive:
 ```bash
