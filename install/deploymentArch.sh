@@ -171,6 +171,27 @@ setup_pacman() {
 setup_virtualization() {
     echo -e "${YELLOW}Setting up KVM/QEMU virtualization...${NC}"
     
+    # Enable multilib repository if not already enabled
+    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+        echo -e "${YELLOW}Enabling multilib repository...${NC}"
+        sudo sh -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
+        sudo pacman -Sy
+    fi
+    
+    # Install required packages
+    echo -e "${YELLOW}Installing virtualization dependencies...${NC}"
+    sudo pacman -S --needed --noconfirm \
+        qemu-full \
+        libvirt \
+        virt-manager \
+        dnsmasq \
+        ebtables \
+        bridge-utils \
+        openbsd-netcat \
+        lib32-gnutls \
+        lib32-libxft \
+        lib32-libpulse
+    
     # Enable and start libvirtd service
     sudo systemctl enable --now libvirtd.service
     
@@ -235,7 +256,7 @@ main() {
     if [ ! -f "/etc/arch-release" ]; then
         echo -e "${RED}This script is designed for Arch Linux. Exiting...${NC}"
         exit 1
-    }
+    fi
 
     # Update system first
     echo -e "${YELLOW}Updating system...${NC}"

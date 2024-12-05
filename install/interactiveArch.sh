@@ -15,7 +15,6 @@ else
 fi
 
 # Partition size configurations (in GB)
-ROOT_PARTITION_SIZE=
 BOOT_PARTITION_SIZE=1
 EFI_PARTITION_SIZE=1
 SWAP_SIZE=8  # Size in GB for swap file
@@ -135,7 +134,6 @@ prompt_for_root_size() {
         esac
     done
 }
-
 # Function to prompt for bootloader type
 prompt_for_bootloader() {
     echo -e "\nSystem Boot Configuration:"
@@ -451,365 +449,205 @@ prompt_for_user_passwords() {
     done
 }
 
-prompt_for_disk_type
-prompt_for_root_size
-prompt_for_disk
-prompt_for_user_passwords
-prompt_for_encryption_password
-prompt_for_bootloader
-prompt_for_processor_and_graphics
-prompt_for_hostname
-
-
-# Clean the disk to remove existing filesystems
-echo "Cleaning the disk to remove existing filesystems..."
-wipefs -a $DISK
-
-
-
-# Partition the disk based on bootloader type
-echo "Partitioning the disk..."
-if [ "$IS_PARTITION" = true ]; then
-    echo "Using existing partition $DISK"
+# Function to perform partitioning and encryption
+setup_partitions() {
+    echo "Setting up partitions and encryption..."
     
-    # Encrypt the entire partition
-    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup luksFormat "$DISK" -
-    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup open "$DISK" cryptroot
-    
-    # Format the encrypted partition
-    mkfs.ext4 /dev/mapper/cryptroot
-    
-    # Mount the encrypted root
-    mount /dev/mapper/cryptroot /mnt
-    
-    # Create boot and EFI partitions at the end of the disk
-    LAST_SECTOR=$(sgdisk -E "$BASE_DISK")
-    if [ "$BOOTLOADER" == "UEFI" ]; then
-        sgdisk -n 0:0:+1G -t 0:ef00 "$BASE_DISK"    # EFI System Partition
-        sgdisk -n 0:0:+2G -t 0:8300 "$BASE_DISK"    # Boot Partition
-        EFI_PARTITION="${BASE_DISK}${PART_SUFFIX}$(($(sgdisk -p "$BASE_DISK" | tail -n 1 | awk '{print $1}' ) - 1))"
-        BOOT_PARTITION="${BASE_DISK}${PART_SUFFIX}$(sgdisk -p "$BASE_DISK" | tail -n 1 | awk '{print $1}')"
-        
-        # Format and mount boot partitions
-        mkfs.fat -F32 "$EFI_PARTITION"
-        mkfs.ext4 "$BOOT_PARTITION"
-        
-        mkdir -p /mnt/boot
-        mount "$BOOT_PARTITION" /mnt/boot
-        mkdir -p /mnt/boot/efi
-        mount "$EFI_PARTITION" /mnt/boot/efi
-    else
-        sgdisk -n 0:0:+1M -t 0:ef02 "$BASE_DISK"    # BIOS boot partition
-        sgdisk -n 0:0:+2G -t 0:8300 "$BASE_DISK"    # Boot Partition
-        BOOT_PARTITION="${BASE_DISK}${PART_SUFFIX}$(sgdisk -p "$BASE_DISK" | tail -n 1 | awk '{print $1}')"
-        
-        # Format and mount boot partition
-        mkfs.ext4 "$BOOT_PARTITION"
-        mkdir -p /mnt/boot
-        mount "$BOOT_PARTITION" /mnt/boot
-    fi
-    
-    # Create swap file
-    dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
-    chmod 600 /mnt/swapfile
-    mkswap /mnt/swapfile
-    swapon /mnt/swapfile
-    
-    # Add to crypttab
-    mkdir -p /mnt/etc
-    echo "cryptroot UUID=$(blkid -s UUID -o value $DISK) none luks" > /mnt/etc/crypttab
-    
-    # Add to fstab
-    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
-else
-    echo "Partitioning the disk..."
+    # Clean and partition disk
+    wipefs -a "$DISK"
+    sgdisk -Z "$DISK"
     sgdisk -o "$DISK"
 
+    # Create partitions based on bootloader type
     if [ "$BOOTLOADER" == "UEFI" ]; then
-        sgdisk -n 1:0:+${EFI_PARTITION_SIZE}G -t 1:ef00 $DISK    # EFI System Partition
-        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 $DISK    # Boot Partition
+        sgdisk -n 1:0:+${EFI_PARTITION_SIZE}G -t 1:ef00 "$DISK"    # EFI System Partition
+        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 "$DISK"    # Boot Partition
     else
-        sgdisk -n 1:0:+1M -t 1:ef02 $DISK    # BIOS boot partition
-        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 $DISK    # Boot Partition
+        sgdisk -n 1:0:+1M -t 1:ef02 "$DISK"    # BIOS boot partition
+        sgdisk -n 2:0:+${BOOT_PARTITION_SIZE}G -t 2:8300 "$DISK"    # Boot Partition
     fi
 
-    sgdisk -n 3:0:+${ROOT_PARTITION_SIZE}G -t 3:8300 $DISK   # Root partition
-    sgdisk -n 4:0:0 -t 4:8300 $DISK      # Home (uses remaining space)
-fi
+    sgdisk -n 3:0:+${ROOT_PARTITION_SIZE}G -t 3:8300 "$DISK"   # Root partition
+    sgdisk -n 4:0:0 -t 4:8300 "$DISK"      # Home partition
 
-
-# Format partitions based on bootloader type
-echo "Formatting partitions..."
-if [ "$IS_PARTITION" = true ]; then
-    echo "Formatting partitions..."
+    # Format partitions
     if [ "$BOOTLOADER" == "UEFI" ]; then
-        mkfs.fat -F32 "$EFI_PARTITION"
+        mkfs.fat -F32 "${DISK}${PART_SUFFIX}1"
     fi
-    mkfs.ext4 "$BOOT_PARTITION"
-    mkfs.ext4 "$ROOT_PARTITION"     # Format the provided partition as root
+    mkfs.ext4 "${DISK}${PART_SUFFIX}2"  # Boot
+    mkfs.ext4 "${DISK}${PART_SUFFIX}3"  # Root
+
+    # Setup encryption for home partition
+    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup luksFormat "${DISK}${PART_SUFFIX}4"
+    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup open "${DISK}${PART_SUFFIX}4" crypthome
+    mkfs.ext4 /dev/mapper/crypthome
 
     # Mount partitions
-    mount "$ROOT_PARTITION" /mnt
+    mount "${DISK}${PART_SUFFIX}3" /mnt  # Mount root
     mkdir -p /mnt/boot
-    mount "$BOOT_PARTITION" /mnt/boot
+    mount "${DISK}${PART_SUFFIX}2" /mnt/boot  # Mount boot
 
     if [ "$BOOTLOADER" == "UEFI" ]; then
         mkdir -p /mnt/boot/efi
-        mount "$EFI_PARTITION" /mnt/boot/efi
-    fi
-else
-    if [ "$BOOTLOADER" == "UEFI" ]; then
-        mkfs.fat -F32 ${DISK}${PART_SUFFIX}1
-    fi
-    mkfs.ext4 ${DISK}${PART_SUFFIX}2
-    mkfs.ext4 ${DISK}${PART_SUFFIX}3     # Root partition as ext4
-
-    # Encrypt home partition
-    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup luksFormat ${DISK}${PART_SUFFIX}4 -
-    echo -n "$ENCRYPTION_PASSWORD" | cryptsetup open ${DISK}${PART_SUFFIX}4 home
-
-    # Verify if the encrypted home partition is successfully opened
-    if [ ! -e /dev/mapper/home ]; then
-        echo "Error: Encrypted home partition failed to open"
-        exit 1
-    fi
-
-    # Format the opened encrypted home partition
-    echo "Formatting the opened encrypted home partition..."
-    mkfs.ext4 /dev/mapper/home           # Home partition as ext4
-
-    # Mount partitions based on bootloader type
-    echo "Mounting partitions..."
-    mount ${DISK}${PART_SUFFIX}3 /mnt    # Mount root
-    mkdir -p /mnt/boot
-    mount ${DISK}${PART_SUFFIX}2 /mnt/boot
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to mount boot partition ${DISK}${PART_SUFFIX}2."
-        exit 1
-    fi
-
-    if [ "$BOOTLOADER" == "UEFI" ]; then
-        mkdir -p /mnt/boot/efi
-        mount ${DISK}${PART_SUFFIX}1 /mnt/boot/efi
-        if [ $? -ne 0 ]; then
-            echo "Error: Failed to mount EFI partition ${DISK}${PART_SUFFIX}1."
-            exit 1
-        fi
+        mount "${DISK}${PART_SUFFIX}1" /mnt/boot/efi  # Mount EFI
     fi
 
     mkdir -p /mnt/home
-    mount /dev/mapper/home /mnt/home
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to mount home partition /dev/mapper/home."
-        exit 1
-    fi
+    mount /dev/mapper/crypthome /mnt/home  # Mount encrypted home
 
-    # Create and enable swap file (after mounting root)
-    echo "Creating swap file..."
-    dd if=/dev/zero of=/mnt/swapfile bs=1M count=$((SWAP_SIZE * 1024))    # Convert GB to MB
+    # Create and mount swap file
+    dd if=/dev/zero of=/mnt/swapfile bs=1M count=$((SWAP_SIZE * 1024))
     chmod 600 /mnt/swapfile
     mkswap /mnt/swapfile
     swapon /mnt/swapfile
 
-    # Add swap file to fstab
+    # Generate fstab with UUIDs
+    mkdir -p /mnt/etc
+    genfstab -U /mnt > /mnt/etc/fstab
     echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
 
+    # Setup crypttab
+    HOME_UUID=$(blkid -s UUID -o value "${DISK}${PART_SUFFIX}4")
+    echo "crypthome UUID=${HOME_UUID} none luks" > /mnt/etc/crypttab
+}
 
+# Update the chroot configuration section to match autoArch.sh
+configure_system() {
+    # First install base system
     echo "Installing base system..."
-    pacstrap /mnt base base-devel linux linux-firmware grub efibootmgr
+    pacstrap /mnt base base-devel linux linux-firmware
 
-    # Generate fstab
-    echo "Generating fstab..."
-    mkdir -p /mnt/etc
-    genfstab -U /mnt >> /mnt/etc/fstab
-    # Ensure /mnt/etc/crypttab exists
-    echo "Generating crypttab..."
-    touch /mnt/etc/crypttab
-    # Create crypttab entry for encrypted home
-    echo "home UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}4) none luks" >> /mnt/etc/crypttab
+    # Now do the chroot configuration
+    arch-chroot /mnt /bin/bash <<CHROOT
+# Set timezone and locale
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+hwclock --systohc
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+locale-gen
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
-    # Verify kernel image exists
-    if [ ! -e /mnt/boot/vmlinuz-linux ]; then
-        echo "Error: Kernel image /mnt/boot/vmlinuz-linux not found."
-        exit 1
-    fi
-    # Generate initramfs
-    arch-chroot /mnt mkinitcpio -P
-
-    echo "Entering installed enviroment..."
-    arch-chroot /mnt /bin/bash <<'CHROOT'
-        # Initialize pacman keyring
-        pacman-key --init
-        pacman-key --populate archlinux
-        pacman -Syu --noconfirm
-
-        # Set locale
-        echo "Setting locale..."
-        echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-        locale-gen
-
-        # Set timezone
-        ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime
-        hwclock --systohc
-
-        # Set hostname
-        echo "Setting hostname..."
-        echo "${HOSTNAME}" > /etc/hostname
-        cat > /etc/hosts <<EOF
+# Set hostname
+echo "Setting hostname..."
+echo "${HOSTNAME}" > /etc/hostname
+cat > /etc/hosts <<EOF
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
 EOF
 
-        # Install and configure sudo
-        echo "Installing sudo..."
-        pacman -S --needed sudo --noconfirm
+# Install and configure sudo
+echo "Installing sudo..."
+pacman -S --needed sudo --noconfirm
 
-        # Set passwords and create user
-        echo "Setting root password..."
-        echo "root:${ROOT_PASSWORD}" | chpasswd
-        echo "Creating new user and setting password..."
-        useradd -m "${USERNAME}"
-        echo "${USERNAME}:${USER_PASSWORD}" | chpasswd
+# Set passwords and create user
+echo "Setting root password..."
+echo "root:${ROOT_PASSWORD}" | chpasswd
+echo "Creating new user and setting password..."
+useradd -m "${USERNAME}"
+echo "${USERNAME}:${USER_PASSWORD}" | chpasswd
 
-        # Configure groups
-        if ! getent group wheel > /dev/null 2>&1; then
-            groupadd wheel
-        fi
-        if ! getent group sudo > /dev/null 2>&1; then
-            groupadd sudo
-        fi
-        usermod -aG wheel,sudo "${USERNAME}"
+# Configure groups
+if ! getent group wheel > /dev/null 2>&1; then
+    groupadd wheel
+fi
+if ! getent group sudo > /dev/null 2>&1; then
+    groupadd sudo
+fi
+usermod -aG wheel,sudo "${USERNAME}"
 
-        # Configure sudoers
-        echo '%wheel ALL=(ALL) ALL' >> /etc/sudoers
-        echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
+# Configure sudoers
+echo '%wheel ALL=(ALL) ALL' >> /etc/sudoers
+echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
 
-        # Update mirrors and install packages
-        echo "Updating mirrorlist..."
-        pacman -S --needed reflector --noconfirm
-        reflector --verbose --country 'US' --latest 100 --download-timeout 1 --number 15 --sort rate --save /etc/pacman.d/mirrorlist
-        
-        # Configure pacman
-        sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
+# Update mirrors and install packages
+echo "Updating mirrorlist..."
+pacman -S --needed reflector --noconfirm
+reflector --verbose --country 'US' --latest 100 --download-timeout 1 --number 15 --sort rate --save /etc/pacman.d/mirrorlist
 
-        # Install yay
-        pacman -S --needed git go --noconfirm
-        sudo -u "${USERNAME}" bash -c "
-            cd ~
-            git clone https://aur.archlinux.org/yay.git
-            cd yay
-            makepkg -si --noconfirm
-        "
+# Configure pacman
+sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
 
-        # Install desktop environment and utilities
-        pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta \
-            kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip \
-            ffmpegthumbs kitty p7zip libreoffice-fresh "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" \
-            sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups \
-            bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
-            libvirt virt-manager nano wget --noconfirm
+# Install bootloader packages
+pacman -S --noconfirm grub efibootmgr os-prober
 
-        # Now enable services after packages are installed
-        systemctl enable sddm
-        systemctl enable NetworkManager
-        systemctl enable cups
-        systemctl enable bluetooth
-        systemctl enable sshd
-        systemctl enable libvirtd
+# Configure mkinitcpio with encryption support
+sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
 
-        # Add user to libvirt group
-        usermod -aG libvirt "${USERNAME}"
+# Generate initramfs
+mkinitcpio -P
 
-        # Set default shell
-        chsh -s /bin/zsh "${USERNAME}"
-CHROOT
-
-    # Ensure /boot/grub directory exists before generating GRUB configuration
-    mkdir -p /mnt/boot/grub
-
-    # Attempt to install GRUB bootloader based on bootloader type
-    echo "Attempting to install GRUB bootloader..."
-
-    GRUB_SUCCESS=0
-
-    if [ "$BOOTLOADER" == "UEFI" ]; then
-        GRUB_INSTALL_COMMANDS=(
-            "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB"
-            "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --recheck --removable"
-            "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --boot-directory=/boot --recheck"
-        )
-    else
-        GRUB_INSTALL_COMMANDS=(
-            "grub-install --target=i386-pc --boot-directory=/boot $DISK --recheck"
-            "grub-install --target=i386-pc --boot-directory=/boot $DISK --force"
-        )
-    fi
-
-    # Loop through each command until one succeeds
-    for CMD in "${GRUB_INSTALL_COMMANDS[@]}"; do
-        echo "Trying: $CMD"
-        if arch-chroot /mnt /bin/bash -c "$CMD"; then
-            echo "GRUB installation succeeded with: $CMD"
-            GRUB_SUCCESS=1
-            break
-        else
-            echo "GRUB installation failed with: $CMD"
-        fi
-    done
-
-    # Check if GRUB installation was successful
-    if [ $GRUB_SUCCESS -ne 1 ]; then
-        echo "Error: GRUB installation failed for all tried methods."
-        exit 1
-    fi
-
-    # Generate GRUB configuration
-    echo "Generating GRUB configuration..."
-    if ! arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg; then
-        echo "Error: Failed to generate GRUB configuration."
-        exit 1
-    fi
-
-    echo "GRUB installation and configuration completed successfully."
-    echo "
-    -------------------------------------------------------------------------------"
-    echo "Installation complete. Please reboot your system and remove your installation boot media..."
+# Install bootloader
+if [ "$BOOTLOADER" == "UEFI" ]; then
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+else
+    grub-install --target=i386-pc "${DISK}"
 fi
 
-# Add this after the GRUB configuration but before the final success message
-echo "Copying installation files to new system..."
-mkdir -p /mnt/root/arch-install
-cp -r /root/custom/* /mnt/root/arch-install/
+# Configure GRUB for encryption
+HOME_UUID=$(blkid -s UUID -o value "${DISK}${PART_SUFFIX}4")
+sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${HOME_UUID}':crypthome"/' /etc/default/grub
+grub-mkconfig -o /boot/grub/grub.cfg
 
-# Ensure scripts are executable in the new system
-chmod +x /mnt/root/arch-install/install/preseedArch.sh
-chmod +x /mnt/root/arch-install/install/deploymentArch.sh
-chmod +x /mnt/root/arch-install/build-iso.sh
-chmod +x /mnt/root/arch-install/test-installer.sh
+# Install yay
+pacman -S --needed git go base-devel --noconfirm
+sudo -u "${USERNAME}" bash -c "
+    cd ~
+    git clone https://aur.archlinux.org/yay.git
+    cd yay
+    makepkg -si --noconfirm
+"
 
-echo "Installation files copied to /root/arch-install/"
-echo "
--------------------------------------------------------------------------------"
-echo "Installation complete. Please reboot your system and remove your installation boot media..."
+# Install desktop environment and utilities
+pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta \
+    kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip \
+    ffmpegthumbs kitty p7zip libreoffice-fresh "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" \
+    sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups \
+    bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
+    libvirt virt-manager nano wget --noconfirm
 
-# After setting up encryption
-echo "Configuring encryption support..."
+# Enable services
+systemctl enable sddm
+systemctl enable NetworkManager
+systemctl enable cups
+systemctl enable bluetooth
+systemctl enable sshd
+systemctl enable libvirtd
 
-# Add encryption modules to mkinitcpio.conf
-arch-chroot /mnt sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
+# Add user to libvirt group
+usermod -aG libvirt "${USERNAME}"
 
-# Get the UUID of the encrypted partition
-CRYPT_UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}4)
+# Set default shell
+chsh -s /bin/zsh "${USERNAME}"
+CHROOT
 
-# Configure crypttab
-echo "cryptroot UUID=${CRYPT_UUID} none luks" > /mnt/etc/crypttab
+    # Copy installation files to new system
+    echo "Copying installation files to new system..."
+    mkdir -p /mnt/root/arch-install
+    cp -r /root/custom/* /mnt/root/arch-install/
 
-# Update GRUB configuration for encryption
-arch-chroot /mnt sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${CRYPT_UUID}':cryptroot root=\/dev\/mapper\/cryptroot"/' /etc/default/grub
+    # Ensure scripts are executable in the new system
+    chmod +x /mnt/root/arch-install/install/preseedArch.sh
+    chmod +x /mnt/root/arch-install/install/deploymentArch.sh
 
-# Regenerate initramfs
-arch-chroot /mnt mkinitcpio -P
+    echo "Installation files copied to /root/arch-install/"
+}
 
-# Regenerate GRUB config
-arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+# Update the main execution flow
+main() {
+    prompt_for_disk_type
+    prompt_for_root_size
+    prompt_for_disk
+    prompt_for_user_passwords
+    prompt_for_encryption_password
+    prompt_for_bootloader
+    prompt_for_processor_and_graphics
+    prompt_for_hostname
+
+    setup_partitions
+    configure_system
+
+    echo "Installation completed successfully!"
+}
+
+main
+
