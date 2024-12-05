@@ -11,7 +11,7 @@ DEBUG=${DEBUG:-0}
 if [ "$DEBUG" -eq 1 ]; then
     set -x
 else
-    exec 1>/dev/null 2>&1  # Redirect all output to /dev/null unless DEBUG=1
+    set +x  # Explicitly disable debug mode
 fi
 
 # Function to log messages even when debug is off
@@ -289,7 +289,7 @@ prompt_for_disk() {
         fi
 
         # Check if input is a partition
-        if echo "$DISK" | grep -q "p[0-9]$\|[0-9]$"; then
+        if echo "$DISK" | grep -q "p[0-9]\+$"; then
             IS_PARTITION=true
             # Extract the base disk name
             BASE_DISK=$(echo "$DISK" | sed 's/p[0-9]\+$//' | sed 's/[0-9]\+$//')
@@ -604,87 +604,93 @@ else
     arch-chroot /mnt mkinitcpio -P
 
     echo "Entering installed enviroment..."
-    arch-chroot /mnt /bin/bash <<EOF
-    pacman-key --init
-    pacman-key --populate archlinux
-    pacman -Syu --noconfirm
+    arch-chroot /mnt /bin/bash <<'CHROOT'
+        # Initialize pacman keyring
+        pacman-key --init
+        pacman-key --populate archlinux
+        pacman -Syu --noconfirm
 
-    echo "Setting locale..."
-    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-    locale-gen
+        # Set locale
+        echo "Setting locale..."
+        echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+        locale-gen
 
-    ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime
-    hwclock --systohc
+        # Set timezone
+        ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime
+        hwclock --systohc
 
-    echo "Setting hostname..."
-    echo $HOSTNAME > /etc/hostname
-    echo "127.0.0.1   localhost" >> /etc/hosts
-    echo "::1         localhost" >> /etc/hosts
-    echo "127.0.1.1   $HOSTNAME.localdomain $HOSTNAME" >> /etc/hosts
-    echo "Hostname set to:"
-    cat /etc/hostname
+        # Set hostname
+        echo "Setting hostname..."
+        echo "${HOSTNAME}" > /etc/hostname
+        cat > /etc/hosts <<EOF
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
+EOF
 
+        # Install and configure sudo
+        echo "Installing sudo..."
+        pacman -S --needed sudo --noconfirm
 
-    # Install sudo before configuring sudoers
-    echo "Installing sudo..."
-    pacman -S --needed sudo --noconfirm
+        # Set passwords and create user
+        echo "Setting root password..."
+        echo "root:${ROOT_PASSWORD}" | chpasswd
+        echo "Creating new user and setting password..."
+        useradd -m "${USERNAME}"
+        echo "${USERNAME}:${USER_PASSWORD}" | chpasswd
 
-    echo "Setting root password..."
-    echo root:$ROOT_PASSWORD | chpasswd
-    echo "Creating new user and setting password..."
-    useradd -m $USERNAME
-    echo $USERNAME:$USER_PASSWORD | chpasswd
+        # Configure groups
+        if ! getent group wheel > /dev/null 2>&1; then
+            groupadd wheel
+        fi
+        if ! getent group sudo > /dev/null 2>&1; then
+            groupadd sudo
+        fi
+        usermod -aG wheel,sudo "${USERNAME}"
 
-    # Ensure the wheel group exists
-    if ! getent group wheel > /dev/null 2>&1; then
-        groupadd wheel
-        echo "Wheel group created."
-    fi
+        # Configure sudoers
+        echo '%wheel ALL=(ALL) ALL' >> /etc/sudoers
+        echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
 
-    # Ensure the sudo group exists
-    if ! getent group sudo > /dev/null 2>&1; then
-        groupadd sudo
-        echo "Sudo group created."
-    fi
+        # Update mirrors and install packages
+        echo "Updating mirrorlist..."
+        pacman -S --needed reflector --noconfirm
+        reflector --verbose --country 'US' --latest 100 --download-timeout 1 --number 15 --sort rate --save /etc/pacman.d/mirrorlist
+        
+        # Configure pacman
+        sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
 
-    echo "Adding new user to the wheel and sudo groups..."
-    usermod -aG wheel,sudo $USERNAME
+        # Install yay
+        pacman -S --needed git go --noconfirm
+        sudo -u "${USERNAME}" bash -c "
+            cd ~
+            git clone https://aur.archlinux.org/yay.git
+            cd yay
+            makepkg -si --noconfirm
+        "
 
-    echo "Configuring sudoers..."
-    echo '%wheel ALL=(ALL) ALL' >> /etc/sudoers
-    echo '%sudo ALL=(ALL) ALL' >> /etc/sudoers
+        # Install desktop environment and utilities
+        pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta \
+            kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip \
+            ffmpegthumbs kitty p7zip libreoffice-fresh "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" \
+            sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups \
+            bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu \
+            libvirt virt-manager nano wget --noconfirm
 
-    echo "Updating mirrorlist..."
-    pacman -S --needed reflector --noconfirm
-    reflector --verbose --country 'US' --latest 100 --download-timeout 1 --number 15 --sort rate --save /etc/pacman.d/mirrorlist
-    echo "Configuring parallel downloads in pacman.conf..."
-    sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
-    grep 'ParallelDownloads' /etc/pacman.conf
+        # Enable services
+        systemctl enable sddm
+        systemctl enable NetworkManager
+        systemctl enable cups
+        systemctl enable bluetooth
+        systemctl enable sshd
+        systemctl enable libvirtd
 
-    pacman -S --needed git go --noconfirm
-    sudo -u $USERNAME bash -c "
-    cd ~
-    git clone https://aur.archlinux.org/yay.git
-    cd yay
-    makepkg -si --noconfirm
-    "
+        # Add user to libvirt group
+        usermod -aG libvirt "${USERNAME}"
 
-    pacman -S --needed xorg btop btrfs-progs chromium sddm plasma kde-system-meta kde-utilities-meta mpv okular gwenview kolourpaint spectacle k3b elisa unzip ffmpegthumbs kitty p7zip libreoffice-fresh $GRAPHICS_DRIVER $PROCESSOR_UCODE sddm networkmanager dhclient grub efibootmgr os-prober snapper openssh cups bluez bluez-utils zsh curl chezmoi openssl ttf-noto-nerd keepassxc qemu libvirt virt-manager nano wget --noconfirm
-
-    systemctl enable sddm
-    systemctl enable NetworkManager
-    systemctl enable cups
-    systemctl enable bluetooth
-    systemctl enable sshd
-    systemctl enable libvirtd
-
-    sudo usermod -aG libvirt $(whoami)
-
-
-    echo "Changing default shell to zsh for the user..."
-    chsh -s /bin/zsh $USERNAME
-     
-    EOF
+        # Set default shell
+        chsh -s /bin/zsh "${USERNAME}"
+CHROOT
 
     # Ensure /boot/grub directory exists before generating GRUB configuration
     mkdir -p /mnt/boot/grub

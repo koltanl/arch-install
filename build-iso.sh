@@ -44,31 +44,34 @@ DEBUG=${DEBUG:-0}
 cat >>${work_dir}/airootfs/root/.zprofile <<EOF
 # Auto-start the installation script
 (
-    # More verbose debugging
-    echo "[$(date)] Starting debug checks..." >/tmp/install.log
+    exec 1> >(tee -a /tmp/install.log)
+    exec 2> >(tee -a /tmp/install.log >&2)
+    set -x  # Enable command tracing
+    
+    echo "[$(date)] Starting debug checks..."
     
     # Check if script exists
     if [ -f ${script_path} ]; then
-        echo "[$(date)] Script found. Checking permissions..." >>/tmp/install.log
-        ls -la ${script_path} >>/tmp/install.log 2>&1
+        echo "[$(date)] Script found. Checking permissions..."
+        ls -la ${script_path}
         
         # Try to make it executable again from within the environment
-        echo "[$(date)] Attempting to set permissions..." >>/tmp/install.log
-        chmod +x ${script_path} >>/tmp/install.log 2>&1
+        echo "[$(date)] Attempting to set permissions..."
+        chmod +x ${script_path}
         
         # Check shell interpreter
-        echo "[$(date)] Checking script interpreter..." >>/tmp/install.log
-        head -n1 ${script_path} >>/tmp/install.log 2>&1
+        echo "[$(date)] Checking script interpreter..."
+        head -n1 ${script_path}
         
-        # Try running with bash explicitly instead of exec
-        echo "[$(date)] Attempting to run script with bash..." >>/tmp/install.log
-        /bin/bash ${script_path} >>/tmp/install.log 2>&1
+        # Try running with bash explicitly and trace execution
+        echo "[$(date)] Attempting to run script with bash..."
+        exec /bin/bash -x ${script_path}
     else
-        echo "[$(date)] Script not found at ${script_path}" >>/tmp/install.log
-        echo "[$(date)] Listing /root/custom/install/ directory:" >>/tmp/install.log
-        ls -la /root/custom/install/ >>/tmp/install.log 2>&1
+        echo "[$(date)] Script not found at ${script_path}"
+        echo "[$(date)] Listing /root/custom/install/ directory:"
+        ls -la /root/custom/install/
     fi
-) 2>>/tmp/install.log
+)
 EOF
 
 # Add additional packages
