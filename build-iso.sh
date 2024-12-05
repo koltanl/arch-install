@@ -61,6 +61,10 @@ dialog
 cryptsetup
 gptfdisk
 reflector
+lspci
+util-linux
+pciutils
+mokutil
 EOF
 
 # Build the ISO

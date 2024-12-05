@@ -15,6 +15,14 @@ sleep 2
 
 # Function to prompt for disk type
 prompt_for_disk_type() {
+    echo -e "\nDetected storage devices:"
+    echo "------------------------"
+    # Show storage controllers
+    lspci | grep -i 'storage\|sata\|nvme' || echo "No storage controllers detected"
+    echo -e "\nAvailable disks:"
+    lsblk -o NAME,SIZE,TYPE,MODEL || echo "No disks detected"
+    echo "------------------------"
+    
     while true; do
         echo "Select disk type:"
         echo "1) SATA/IDE (e.g., /dev/sda)"
@@ -39,6 +47,26 @@ prompt_for_disk_type() {
 
 # Function to prompt for bootloader type
 prompt_for_bootloader() {
+    echo -e "\nSystem boot information:"
+    echo "------------------------"
+    # Check if we're in a VM
+    systemd-detect-virt > /dev/null 2>&1
+    IS_VM=$?
+    if [ $IS_VM -eq 0 ]; then
+        echo "Running in virtual machine: $(systemd-detect-virt)"
+    else
+        echo "Running on physical hardware"
+    fi
+    
+    # Check for UEFI
+    if [ -d "/sys/firmware/efi" ]; then
+        echo "UEFI boot detected"
+        echo "Secure Boot: $(mokutil --sb-state 2>/dev/null || echo 'unknown')"
+    else
+        echo "Legacy BIOS boot detected"
+    fi
+    echo "------------------------"
+    
     while true; do
         echo "Select bootloader type:"
         echo "1) UEFI"
@@ -63,6 +91,15 @@ prompt_for_bootloader() {
 
 # Function to prompt for processor and graphics type
 prompt_for_processor_and_graphics() {
+    echo -e "\nSystem hardware information:"
+    echo "------------------------"
+    echo "CPU Information:"
+    lscpu | grep -E "Model name|Vendor ID" || echo "CPU information unavailable"
+    
+    echo -e "\nGraphics Information:"
+    lspci | grep -i 'vga\|3d\|display' || echo "No graphics hardware detected"
+    echo "------------------------"
+    
     # Processor selection
     while true; do
         echo "Select processor type for ucode:"
@@ -120,23 +157,51 @@ prompt_for_processor_and_graphics() {
 
 # Function to prompt for disk
 prompt_for_disk() {
-    lsblk
-    echo -e "\nYou can specify either:"
-    echo "1. A whole disk (e.g., /dev/nvme0n1)"
-    echo "2. A specific partition (e.g., /dev/nvme0n1p4)"
-    read -p "Enter the disk or partition to use: " DISK
-
-    # Check if input is a partition
-    if echo "$DISK" | grep -q "p[0-9]$\|[0-9]$"; then
-        IS_PARTITION=true
-        # Extract the base disk name
-        BASE_DISK=$(echo "$DISK" | sed 's/p[0-9]\+$//' | sed 's/[0-9]\+$//')
-        echo "Using partition $DISK on disk $BASE_DISK"
-    else
-        IS_PARTITION=false
-        BASE_DISK=$DISK
-        echo "Using entire disk $DISK"
+    echo -e "\nDisk information:"
+    echo "------------------------"
+    echo "Block devices:"
+    lsblk -o NAME,SIZE,TYPE,MODEL,FSTYPE,MOUNTPOINT || echo "No block devices detected"
+    
+    if command -v fdisk >/dev/null; then
+        echo -e "\nPartition tables:"
+        fdisk -l 2>/dev/null | grep "Disk /dev" || echo "No partition tables found"
     fi
+    echo "------------------------"
+    
+    while true; do
+        echo -e "\nYou can specify either:"
+        echo "1. A whole disk (e.g., /dev/nvme0n1)"
+        echo "2. A specific partition (e.g., /dev/nvme0n1p4)"
+        read -p "Enter the disk or partition to use: " DISK
+
+        # Validate input exists
+        if [ ! -e "$DISK" ]; then
+            echo "Error: Device $DISK does not exist."
+            echo "Please enter a valid disk or partition."
+            sleep 1
+            continue
+        fi
+
+        # Check if input is a partition
+        if echo "$DISK" | grep -q "p[0-9]$\|[0-9]$"; then
+            IS_PARTITION=true
+            # Extract the base disk name
+            BASE_DISK=$(echo "$DISK" | sed 's/p[0-9]\+$//' | sed 's/[0-9]\+$//')
+            if [ -e "$BASE_DISK" ]; then
+                echo "Using partition $DISK on disk $BASE_DISK"
+                break
+            else
+                echo "Error: Base disk $BASE_DISK not found."
+                sleep 1
+                continue
+            fi
+        else
+            IS_PARTITION=false
+            BASE_DISK=$DISK
+            echo "Using entire disk $DISK"
+            break
+        fi
+    done
 }
 prompt_for_hostname() {
     read -p "Enter your desired hostname: " HOSTNAME
