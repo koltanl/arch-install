@@ -277,17 +277,15 @@ sudo -u "${USERNAME}" bash -c "
 "
 
 # Install desktop environment and utilities
-pacman -S --needed sddm plasma-desktop plasma-wayland-session plasma-pa plasma-nm \
+pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta \
     "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" networkmanager dhclient \
-    grub efibootmgr os-prober zsh nano wget --noconfirm
+    bluez bluez-utils grub efibootmgr os-prober zsh nano wget --noconfirm
 
 
 # Enable services
 systemctl enable sddm
 systemctl enable NetworkManager
-systemctl enable cups
 systemctl enable bluetooth
-systemctl enable sshd
 
 # Setup deployment script to run on first login
 echo "Setting up deployment script to run on first login..."

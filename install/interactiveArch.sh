@@ -611,10 +611,7 @@ pacman -S --needed sddm plasma-desktop plasma-wayland-session plasma-pa plasma-n
 # Enable services
 systemctl enable sddm
 systemctl enable NetworkManager
-systemctl enable cups
 systemctl enable bluetooth
-systemctl enable sshd
-systemctl enable libvirtd
 
 # Add user to libvirt group
 usermod -aG libvirt "${USERNAME}"
