@@ -25,8 +25,10 @@ rm -rf ${work_dir}/airootfs/root/custom/isoout
 rm -rf ${work_dir}/airootfs/root/custom/work
 
 # After copying files but before building ISO, update permissions
-# Update the file permissions section
+# Main installation scripts
 chmod 755 ${work_dir}/airootfs/root/custom/install/preseedArch.sh
+chmod 755 ${work_dir}/airootfs/root/custom/install/autoArch.sh
+chmod 755 ${work_dir}/airootfs/root/custom/install/interactiveArch.sh
 chmod 755 ${work_dir}/airootfs/root/custom/install/deploymentArch.sh
 chmod 755 ${work_dir}/airootfs/root/custom/build-iso.sh
 chmod 755 ${work_dir}/airootfs/root/custom/test-installer.sh
