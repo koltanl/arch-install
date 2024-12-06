@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Start time measurement
+START_TIME=$(date +%s)
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,7 +74,7 @@ sudo_run() {
                 break
             fi
         else
-            if sudo "${cmd[@]}" 2>/dev/null; then
+            if sudo -S "${cmd[@]}" 2>/dev/null; then
                 success=true
                 break
             fi
@@ -170,43 +173,137 @@ install_zplug() {
 install_packages() {
     echo -e "${YELLOW}Installing packages from pkglist.txt...${NC}"
     
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install packages from pkglist.txt${NC}"
-        return 0
+    # Debug statements
+    echo "DEBUG: ---- Environment Info ----"
+    echo "DEBUG: PWD=$PWD"
+    echo "DEBUG: LAUNCHDIR=$LAUNCHDIR"
+    echo "DEBUG: SCRIPT_PATH=$0"
+    echo "DEBUG: REAL_USER=$REAL_USER"
+    echo "DEBUG: HOME=$HOME"
+    echo "DEBUG: SUDO_USER=$SUDO_USER"
+    
+    echo "DEBUG: ---- File Checks ----"
+    echo "DEBUG: Testing /root/arch-install/install/pkglist.txt"
+    ls -la /root/arch-install/install/pkglist.txt 2>&1
+    
+    echo "DEBUG: Testing ./install/pkglist.txt"
+    ls -la ./install/pkglist.txt 2>&1
+    
+    echo "DEBUG: Testing $(dirname "$0")/pkglist.txt"
+    ls -la "$(dirname "$0")/pkglist.txt" 2>&1
+    
+    echo "DEBUG: ---- Permissions ----"
+    echo "DEBUG: Current user: $(whoami)"
+    echo "DEBUG: Current groups: $(groups)"
+    
+    # Try to read the file directly
+    echo "DEBUG: ---- File Contents Test ----"
+    echo "DEBUG: Attempting to read pkglist.txt:"
+    if sudo test -f "/root/arch-install/install/pkglist.txt"; then
+        echo "DEBUG: File exists, showing first 5 lines:"
+        sudo head -n 5 "/root/arch-install/install/pkglist.txt" 2>&1
+    else
+        echo "DEBUG: File does not exist!"
     fi
     
-    # Define the correct path to pkglist.txt
-    local pkglist_path="$LAUNCHDIR/install/pkglist.txt"
+    local pkglist_path="/root/arch-install/install/pkglist.txt"
     
-    if [ ! -f "$pkglist_path" ]; then
+    if sudo test -f "$pkglist_path"; then
+        # Create array of packages from pkglist.txt
+        local packages=()
+        while IFS= read -r package; do
+            # Skip empty lines and comments
+            [[ -z "$package" || "$package" =~ ^# ]] && continue
+            packages+=("$package")
+            echo "DEBUG: Added package: $package"
+        done < <(sudo cat "$pkglist_path")
+    else
         echo -e "${RED}Error: pkglist.txt not found at $pkglist_path${NC}"
         return 1
-    fi    
-    # Enable multilib repository if not already enabled
-    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
-        echo -e "${YELLOW}Enabling multilib repository...${NC}"
-        sudo bash -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
-        sudo pacman -Sy
     fi
 
-    # Create array of packages from pkglist.txt
-    local packages=()
-    while read -r package; do
-        # Skip empty lines and comments
-        [[ -z "$package" || "$package" =~ ^# ]] && continue
-        packages+=("$package")
-    done < "$pkglist_path"
+    echo "DEBUG: Total packages to install: ${#packages[@]}"
     
-    # Install all packages in a single pacman command
     if [ ${#packages[@]} -gt 0 ]; then
         echo -e "${YELLOW}Installing packages with pacman...${NC}"
-        sudo pacman -S --needed --noconfirm "${packages[@]}" || true
         
-        # Try remaining packages with yay
-        echo -e "${YELLOW}Installing remaining packages with yay...${NC}"
+        # Enable multilib repository first
+        echo "DEBUG: Enabling multilib repository..."
+        if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+            echo "DEBUG: Adding multilib repository to pacman.conf"
+            sudo bash -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
+            sudo pacman -Sy
+        else
+            echo "DEBUG: multilib repository already enabled"
+        fi
+        
+        # First pass: Install non-group packages
+        local regular_packages=()
         for package in "${packages[@]}"; do
-            if ! pacman -Qi "$package" >/dev/null 2>&1; then
-                yay -S --needed --noconfirm "$package" || true
+            # Skip known group packages and AUR packages
+            if [[ "$package" != "plasma" && \
+                  "$package" != "brother-mfc-l2730dw" && \
+                  "$package" != "dislocker" && \
+                  "$package" != "moar" && \
+                  "$package" != "proton" && \
+                  "$package" != "python-pynput" && \
+                  "$package" != "python-pysmb" && \
+                  "$package" != "steam" ]]; then
+                regular_packages+=("$package")
+            fi
+        done
+        
+        if [ ${#regular_packages[@]} -gt 0 ]; then
+            echo "DEBUG: Installing ${#regular_packages[@]} regular packages"
+            if [ -n "$SUDO_PASS" ]; then
+                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${regular_packages[@]}" || true
+            else
+                sudo pacman -S --needed --noconfirm "${regular_packages[@]}" || true
+            fi
+        fi
+        
+        # Second pass: Install plasma group with all components
+        if [[ " ${packages[*]} " =~ " plasma " ]]; then
+            echo "DEBUG: Installing plasma group (all components)"
+            if [ -n "$SUDO_PASS" ]; then
+                printf "%s\nall\n" "$SUDO_PASS" | sudo -S pacman -S --needed plasma || true
+            else
+                printf "all\n" | sudo pacman -S --needed plasma || true
+            fi
+        fi
+        
+        # Third pass: Install AUR packages
+        echo -e "${YELLOW}Installing AUR packages with yay...${NC}"
+        local aur_packages=(
+            "brother-mfc-l2730dw"
+            "dislocker"
+            "moar"
+            "proton"
+            "python-pynput"
+            "python-pysmb"
+            "steam"
+        )
+        
+        for package in "${aur_packages[@]}"; do
+            if [[ " ${packages[*]} " =~ " $package " ]]; then
+                echo "DEBUG: Installing AUR package: $package"
+                if [ -n "$SUDO_PASS" ]; then
+                    printf "%s\n" "$SUDO_PASS" | \
+                    sudo -u "$REAL_USER" \
+                        SUDO_ASKPASS="$ASKPASS_SCRIPT" \
+                        HOME="/home/$REAL_USER" \
+                        USER="$REAL_USER" \
+                        LOGNAME="$REAL_USER" \
+                        PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
+                        yay -S --needed --noconfirm --sudoflags "-S" "$package" || true
+                else
+                    sudo -u "$REAL_USER" \
+                        HOME="/home/$REAL_USER" \
+                        USER="$REAL_USER" \
+                        LOGNAME="$REAL_USER" \
+                        PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
+                        yay -S --needed --noconfirm "$package" || true
+                fi
             fi
         done
     fi
@@ -469,7 +566,7 @@ setup_scripts() {
         fi
         
         # Copy root scripts separately
-        echo "Copying root level scripts..."
+        echo "Copying root scripts..."
         sudo find "$scripts_dir" -maxdepth 1 -type f -name "*.sh" -exec cp {} "$bin_dir/" \;
         sudo find "$scripts_dir" -maxdepth 1 -type f -name "*.py" -exec cp {} "$bin_dir/" \;
         
@@ -643,7 +740,7 @@ main() {
 
     # Install core dependencies
     install_yay || handle_error "Yay installation failed"
-    # install_packages || handle_error "Package installation failed"
+    install_packages || handle_error "Package installation failed"
     install_nnn || handle_error "NNN installation failed"
     change_shell_to_zsh || handle_error "Shell change failed"
     install_zplug || handle_error "Zplug installation failed"
@@ -665,6 +762,7 @@ main() {
             fi
         done
     fi
+    sudo systemctl enable sddm
 
     # Clean up installation files with proper permissions
     echo -e "${YELLOW}Cleaning up installation files...${NC}"
@@ -684,6 +782,14 @@ main() {
     fi
     
     echo -e "${GREEN}Installation complete! Please log out and log back in for all changes to take effect.${NC}"
+    
+    # Calculate and display elapsed time
+    END_TIME=$(date +%s)
+    ELAPSED_TIME=$((END_TIME - START_TIME))
+    HOURS=$((ELAPSED_TIME / 3600))
+    MINUTES=$(( (ELAPSED_TIME % 3600) / 60 ))
+    SECONDS=$((ELAPSED_TIME % 60))
+    echo -e "${GREEN}Total installation time: ${HOURS}h ${MINUTES}m ${SECONDS}s${NC}"
 }
 
 # Run the script

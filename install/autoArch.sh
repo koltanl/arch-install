@@ -249,9 +249,6 @@ sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
 # Install base packages
 pacman -S --needed grub efibootmgr os-prober --noconfirm
 
-# Install desktop environment
-pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta --noconfirm
-
 # Install graphics and processor-specific packages
 pacman -S --needed "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" --noconfirm
 
@@ -288,7 +285,6 @@ sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${HOME_UU
 grub-mkconfig -o /boot/grub/grub.cfg
 
 # Enable services
-systemctl enable sddm
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable sshd

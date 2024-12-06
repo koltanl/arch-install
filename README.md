@@ -132,3 +132,8 @@ For detailed installation instructions, see [install/README.md](install/README.m
 - Installation: /tmp/install.log
 - Deployment: Remote system logs via SSH
 
+issues?
+decrypt the drive before running the ./test-installer.sh -u command
+use the correct ip address
+using the wrong drivers
+you want to use interactive mode but haven't renamed the preseed.conf file

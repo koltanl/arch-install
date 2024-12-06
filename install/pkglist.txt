@@ -1,3 +1,7 @@
+sddm
+plasma
+kde-system-meta
+kde-utilities-meta
 alsa-utils
 amd-ucode
 base
