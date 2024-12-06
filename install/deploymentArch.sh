@@ -596,6 +596,29 @@ verify_sudo_access() {
     return 0
 }
 
+# Add this function before main()
+secure_ssh() {
+    echo -e "${YELLOW}Securing SSH configuration...${NC}"
+    
+    local sshd_config="/etc/ssh/sshd_config"
+    
+    if [ -f "$sshd_config" ]; then
+        echo "Disabling SSH password authentication and root login..."
+        # Disable password authentication
+        sudo sed -i 's/^PasswordAuthentication yes/#PasswordAuthentication no/' "$sshd_config"
+        # Disable root login
+        sudo sed -i 's/^PermitRootLogin yes/#PermitRootLogin prohibit-password/' "$sshd_config"
+        
+        # Restart SSH service to apply changes
+        if systemctl is-active sshd >/dev/null 2>&1; then
+            echo "Restarting SSH service..."
+            sudo_run systemctl restart sshd
+        fi
+    else
+        handle_error "SSH config file not found at $sshd_config"
+    fi
+}
+
 # Main installation process
 main() {
     # Verify sudo access before proceeding
@@ -645,6 +668,11 @@ main() {
 
     # Clean up installation files with proper permissions
     echo -e "${YELLOW}Cleaning up installation files...${NC}"
+    
+    # Secure SSH first
+    secure_ssh || handle_error "Failed to secure SSH configuration"
+    
+    # Then clean up files
     cd /
     if [ -d "$LAUNCHDIR" ]; then
         sudo_run rm -rf "$LAUNCHDIR" || echo "Warning: Could not remove $LAUNCHDIR"

@@ -588,6 +588,17 @@ pacman -S --needed networkmanager dhclient bluez bluez-utils --noconfirm
 # Install basic utilities
 pacman -S --needed zsh nano wget --noconfirm
 
+# Install and configure SSH
+echo "Installing and configuring SSH..."
+pacman -S --needed openssh --noconfirm
+
+# Configure SSH to allow password authentication
+sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Enable SSH service
+systemctl enable sshd
+
 # Configure mkinitcpio with encryption support
 sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
 

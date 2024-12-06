@@ -13,9 +13,11 @@ DEBUG=0
 DEPLOYMENT_SCRIPT="install/deploymentArch.sh"
 REMOTE_DEPLOYMENT_PATH="/root/arch-install/install/deploymentArch.sh"
 SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
-VM_IP="192.168.111.207"
+VM_IP="${VM_IP:-192.168.111.207}"  # Default IP, can be overridden
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
+SSH_USER="${SSH_USER:-}"  # Will be set from preseed.conf if not provided
+SSH_PASS="${SSH_PASS:-}"  # Will be set from preseed.conf if not provided
 
 # Source credentials from preseed.conf
 if [ -f "$PRESEED_CONF" ]; then
@@ -251,6 +253,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --help|-h)
             show_usage
+            ;;
+        --ip=*)
+            VM_IP="${1#*=}"
+            shift
+            ;;
+        --username=*)
+            SSH_USER="${1#*=}"
+            shift
+            ;;
+        --password=*)
+            SSH_PASS="${1#*=}"
+            shift
             ;;
         *)
             echo "Unknown option: $1"
