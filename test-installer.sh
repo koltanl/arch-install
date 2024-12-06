@@ -13,7 +13,7 @@ DEBUG=0
 DEPLOYMENT_SCRIPT="install/deploymentArch.sh"
 REMOTE_DEPLOYMENT_PATH="/root/arch-install/install/deploymentArch.sh"
 SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
-VM_IP="192.168.111.158"
+VM_IP="192.168.111.207"
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
 
@@ -53,9 +53,9 @@ show_usage() {
     echo "  --fresh, -f          Start fresh VM from ISO (default behavior)"
     echo "  --debug, -d          Enable debug output for build and installation"
     echo "  --update-deploy, -u  Update and run deployment script on VM"
-    echo "  --save, -s           Save current VM state"
-    echo "  --restore, -r        Restore VM from saved state"
-    echo "  --help, -h           Show this help message"
+    echo "  --save|-s            Save current VM state"
+    echo "  --restore|-r         Restore VM from saved state"
+    echo "  --help|-h           Show this help message"
     exit 1
 }
 # Function to wait for VM creation
@@ -143,83 +143,74 @@ cleanup() {
 
 # Define save and restore functions
 save_vm_state() {
-    local state_dir="$1"
-    echo "Saving VM state to $state_dir..."
+    local state_name="saved-state"
+    echo "Saving VM state..."
     
-    # Ensure VM is shut down
-    sudo virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
-    
-    # Create state directory with proper permissions
-    sudo mkdir -p "$state_dir"
-    sudo chown "$USER:$USER" "$state_dir"
-    
-    # Copy disk image with sudo
-    if [ -f "$VM_DISK_PATH" ]; then
-        echo "Copying disk image..."
-        sudo cp "$VM_DISK_PATH" "$state_dir/disk.qcow2"
-        sudo chown "$USER:$USER" "$state_dir/disk.qcow2"
-    else
-        echo "Error: VM disk image not found"
+    # Check if VM exists
+    if ! virsh --connect qemu:///system list --all | grep -q "$VM_NAME"; then
+        echo "Error: VM $VM_NAME does not exist"
         return 1
     fi
     
-    # Export VM configuration
-    echo "Saving VM configuration..."
-    sudo virsh --connect qemu:///system dumpxml "$VM_NAME" > "$state_dir/config.xml"
+    # Stop the VM if it's running
+    if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
+        echo "Stopping VM for snapshot..."
+        virsh --connect qemu:///system destroy "$VM_NAME"
+    fi
     
-    echo "VM state saved successfully"
+    # Get the disk path
+    local disk_path=$(virsh --connect qemu:///system domblklist "$VM_NAME" | grep vda | awk '{print $2}')
+    
+    # Create backup of current disk
+    local backup_path="${disk_path}.${state_name}"
+    echo "Creating disk backup at ${backup_path}..."
+    
+    # Remove old backup if it exists
+    sudo rm -f "$backup_path" 2>/dev/null || true
+    
+    # Create new backup
+    if ! sudo cp "$disk_path" "$backup_path"; then
+        echo "Error: Failed to create disk backup"
+        return 1
+    fi
+    
+    echo "VM state saved successfully to ${backup_path}"
     return 0
 }
 
 restore_vm_state() {
-    local state_dir="$1"
+    local state_name="saved-state"
+    echo "Restoring VM state..."
     
-    if [ ! -d "$state_dir" ]; then
-        echo "Error: No saved state found in $state_dir"
+    # Get the disk path
+    local disk_path=$(virsh --connect qemu:///system domblklist "$VM_NAME" | grep vda | awk '{print $2}')
+    local backup_path="${disk_path}.${state_name}"
+    
+    # Check if backup exists
+    if [ ! -f "$backup_path" ]; then
+        echo "Error: No saved state found at ${backup_path}"
         return 1
     fi
     
-    if [ ! -f "$state_dir/disk.qcow2" ] || [ ! -f "$state_dir/config.xml" ]; then
-        echo "Error: Incomplete VM state - missing required files"
-        return 1
-    fi
-    
-    echo "Restoring VM state from $state_dir..."
-    
-    # Stop the VM if it's running, but don't destroy it
+    # Stop the VM if it's running
     if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
-        echo "Shutting down running VM..."
-        virsh --connect qemu:///system shutdown "$VM_NAME"
-        # Wait for shutdown
-        for i in {1..30}; do
-            if ! virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
-                break
-            fi
-            sleep 1
-        done
-        # Force stop if graceful shutdown failed
-        if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
-            virsh --connect qemu:///system destroy "$VM_NAME"
-        fi
+        echo "Stopping VM for restore..."
+        virsh --connect qemu:///system destroy "$VM_NAME"
+        sleep 2  # Give VM time to fully stop
     fi
     
-    # Undefine VM but keep storage
-    if virsh --connect qemu:///system list --all | grep -q "$VM_NAME"; then
-        echo "Undefining VM configuration..."
-        virsh --connect qemu:///system undefine "$VM_NAME" --nvram
+    # Restore from backup
+    echo "Restoring disk from backup..."
+    if ! sudo cp "$backup_path" "$disk_path"; then
+        echo "Error: Failed to restore from backup"
+        return 1
     fi
-    
-    # Restore disk image
-    echo "Restoring disk image..."
-    cp "$state_dir/disk.qcow2" "$VM_DISK_PATH"
-    
-    # Restore VM configuration
-    echo "Restoring VM configuration..."
-    virsh --connect qemu:///system define "$state_dir/config.xml"
     
     # Start the VM
-    echo "Starting restored VM..."
-    virsh --connect qemu:///system start "$VM_NAME"
+    echo "Starting VM..."
+    if ! virsh --connect qemu:///system start "$VM_NAME"; then
+        echo "Warning: Failed to start VM - it may already be running"
+    fi
     
     echo "VM state restored successfully"
     return 0
