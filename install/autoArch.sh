@@ -287,18 +287,26 @@ systemctl enable sddm
 systemctl enable NetworkManager
 systemctl enable bluetooth
 
-# Setup deployment script to run on first login
-echo "Setting up deployment script to run on first login..."
-cat >> /home/${USERNAME}/.bashrc <<'EOF'
+# Create a systemd user service for first-login deployment
+cat > /etc/systemd/system/first-login-deploy.service <<'EOF'
+[Unit]
+Description=First Login Deployment Script
+After=plasma-core.target
 
-if [ -f /root/arch-install/install/deploymentArch.sh ]; then
-    sudo /root/arch-install/install/deploymentArch.sh
-fi
+[Service]
+Type=oneshot
+ExecStart=/root/arch-install/install/deploymentArch.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=plasma-workspace.target
 EOF
 
-# Set proper ownership
-chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
-chmod 644 /home/${USERNAME}/.bashrc
+# Enable the service
+systemctl enable first-login-deploy.service
+
+# Create a flag file to track if deployment has run
+touch /var/lib/first-login-deploy
 
 CHROOT
 

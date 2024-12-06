@@ -1,11 +1,18 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+# Add at the beginning of deploymentArch.sh
+if [ ! -f "/var/lib/first-login-deploy" ]; then
+    echo "First-login deployment already completed"
+    systemctl disable --now first-login-deploy
+    exit 0
+fi
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
-
+LAUNCHDIR="/root/arch-install"
 # Test mode flag
 TEST_MODE=${TEST_MODE:-false}
 
@@ -158,8 +165,8 @@ setup_kitty() {
     mkdir -p "$HOME/.config/kitty"
 
     # Copy kitty configuration files
-    if [ -d "kitty" ]; then
-        cp -r kitty/* "$HOME/.config/kitty/"
+    if [ -d "$LAUNCHDIR/kitty" ]; then
+        cp -r "$LAUNCHDIR/kitty/*" "$HOME/.config/kitty/"
     else
         echo -e "${RED}Warning: kitty configuration directory not found${NC}"
     fi
@@ -189,27 +196,27 @@ setup_kde() {
     fi
     
     # Copy KWin configurations
-    if [ -d "kde/kwin" ]; then
-        cp kde/kwin/* "$kde_config_dir/"
+    if [ -d "$LAUNCHDIR/kde/kwin" ]; then
+        cp "$LAUNCHDIR/kde/kwin/*" "$kde_config_dir/"
     fi
     
     # Copy shortcuts
-    if [ -d "kde/shortcuts" ]; then
-        cp kde/shortcuts/* "$kde_config_dir/"
+    if [ -d "$LAUNCHDIR/kde/shortcuts" ]; then
+        cp "$LAUNCHDIR/kde/shortcuts/*" "$kde_config_dir/"
     fi
     
     # Copy Plasma configurations
-    if [ -d "kde/plasma" ]; then
-        cp -r kde/plasma/* "$kde_config_dir/"
+    if [ -d "$LAUNCHDIR/kde/plasma" ]; then
+        cp -r "$LAUNCHDIR/kde/plasma/*" "$kde_config_dir/"
     fi
     
     # Copy theme configurations
-    if [ -f "kde/kdeglobals" ]; then
-        cp kde/kdeglobals "$kde_config_dir/"
+    if [ -f "$LAUNCHDIR/kde/kdeglobals" ]; then
+        cp "$LAUNCHDIR/kde/kdeglobals" "$kde_config_dir/"
     fi
     
-    if [ -d "kde/kdedefaults" ]; then
-        cp -r kde/kdedefaults "$kde_config_dir/"
+    if [ -d "$LAUNCHDIR/kde/kdedefaults" ]; then
+        cp -r "$LAUNCHDIR/kde/kdedefaults" "$kde_config_dir/"
     fi
 }
 
@@ -227,12 +234,12 @@ setup_scripts() {
     # Create utils subdirectory if it exists in source
     if [ -d "scripts/utils" ]; then
         mkdir -p "$bin_dir/utils"
-        cp scripts/utils/*.sh "$bin_dir/utils/" 2>/dev/null || true
+        cp "$LAUNCHDIR/scripts/utils/*.sh" "$bin_dir/utils/" 2>/dev/null || true
     fi
     
     # Copy scripts with error suppression
-    cp scripts/*.sh "$bin_dir/" 2>/dev/null || true
-    cp scripts/*.py "$bin_dir/" 2>/dev/null || true
+    cp "$LAUNCHDIR/scripts/*.sh" "$bin_dir/" 2>/dev/null || true
+    cp "$LAUNCHDIR/scripts/*.py" "$bin_dir/" 2>/dev/null || true
     
     # Make everything executable
     find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
@@ -249,20 +256,10 @@ setup_omp() {
     local config_dir="$HOME/.config"
     mkdir -p "$config_dir"
     
-    cp dotfiles/omp.json "$config_dir/"
+    cp "$LAUNCHDIR/dotfiles/omp.json" "$config_dir/"
 }
 
-setup_pacman() {
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would configure pacman eye candy${NC}"
-        return 0
-    fi
 
-    echo -e "${YELLOW}Setting up Pacman configuration...${NC}"
-    if [ -f "scripts/pacmaneyecandy.sh" ]; then
-        sudo bash scripts/pacmaneyecandy.sh
-    fi
-}
 
 # Main installation process
 main() {
@@ -282,7 +279,6 @@ main() {
 
     # Install core dependencies
     install_yay || handle_error "Yay installation failed"
-    setup_pacman || handle_error "Pacman setup failed"
     install_packages || handle_error "Package installation failed"
     install_zplug || handle_error "Zplug installation failed"
     install_oh_my_posh || handle_error "Oh-my-posh installation failed"
@@ -295,8 +291,8 @@ main() {
 
     # Run all scripts in torun directory
     echo -e "${YELLOW}Running additional configuration scripts...${NC}"
-    if [ -d "/root/arch-install/torun" ]; then
-        for script in /root/arch-install/torun/*.sh; do
+    if [ -d "$LAUNCHDIR/torun" ]; then
+        for script in "$LAUNCHDIR/torun"/*.sh; do
             if [ -f "$script" ]; then
                 echo -e "${YELLOW}Running $(basename "$script")...${NC}"
                 sudo bash "$script" || handle_error "Failed to run $(basename "$script")"
@@ -309,8 +305,12 @@ main() {
     # Clean up installation files; ALWAYS KEEP THIS AT END OF SCRIPT
     echo -e "${YELLOW}Cleaning up installation files...${NC}"
     cd /
-    rm -rf /root/arch-install
+    rm -rf "$LAUNCHDIR"
 }
 
 # Run the script
 main 
+
+# At the end of the script
+rm -f /var/lib/first-login-deploy
+systemctl disable --now first-login-deploy 
