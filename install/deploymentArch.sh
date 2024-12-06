@@ -367,7 +367,7 @@ change_shell_to_zsh() {
     if [ "$TEST_MODE" = true ]; then
         echo -e "${YELLOW}TEST MODE: Would change default shell to zsh for $REAL_USER${NC}"
         return 0
-    }
+    fi
 
     echo -e "${YELLOW}Changing default shell to zsh...${NC}"
     
