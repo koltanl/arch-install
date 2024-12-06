@@ -169,143 +169,98 @@ install_zplug() {
     fi
 }
 
-# Function to install packages from pkglist.txt
+# Function to install packages from pkglist.json
 install_packages() {
-    echo -e "${YELLOW}Installing packages from pkglist.txt...${NC}"
+    echo -e "${YELLOW}Installing packages from pkglist.json...${NC}"
     
-    # Debug statements
-    echo "DEBUG: ---- Environment Info ----"
-    echo "DEBUG: PWD=$PWD"
-    echo "DEBUG: LAUNCHDIR=$LAUNCHDIR"
-    echo "DEBUG: SCRIPT_PATH=$0"
-    echo "DEBUG: REAL_USER=$REAL_USER"
-    echo "DEBUG: HOME=$HOME"
-    echo "DEBUG: SUDO_USER=$SUDO_USER"
+    local pkglist_path="/root/arch-install/install/pkglist.json"
     
-    echo "DEBUG: ---- File Checks ----"
-    echo "DEBUG: Testing /root/arch-install/install/pkglist.txt"
-    ls -la /root/arch-install/install/pkglist.txt 2>&1
-    
-    echo "DEBUG: Testing ./install/pkglist.txt"
-    ls -la ./install/pkglist.txt 2>&1
-    
-    echo "DEBUG: Testing $(dirname "$0")/pkglist.txt"
-    ls -la "$(dirname "$0")/pkglist.txt" 2>&1
-    
-    echo "DEBUG: ---- Permissions ----"
-    echo "DEBUG: Current user: $(whoami)"
-    echo "DEBUG: Current groups: $(groups)"
-    
-    # Try to read the file directly
-    echo "DEBUG: ---- File Contents Test ----"
-    echo "DEBUG: Attempting to read pkglist.txt:"
-    if sudo test -f "/root/arch-install/install/pkglist.txt"; then
-        echo "DEBUG: File exists, showing first 5 lines:"
-        sudo head -n 5 "/root/arch-install/install/pkglist.txt" 2>&1
-    else
-        echo "DEBUG: File does not exist!"
-    fi
-    
-    local pkglist_path="/root/arch-install/install/pkglist.txt"
-    
-    if sudo test -f "$pkglist_path"; then
-        # Create array of packages from pkglist.txt
-        local packages=()
-        while IFS= read -r package; do
-            # Skip empty lines and comments
-            [[ -z "$package" || "$package" =~ ^# ]] && continue
-            packages+=("$package")
-            echo "DEBUG: Added package: $package"
-        done < <(sudo cat "$pkglist_path")
-    else
-        echo -e "${RED}Error: pkglist.txt not found at $pkglist_path${NC}"
+    if ! sudo test -f "$pkglist_path"; then
+        echo -e "${RED}Error: pkglist.json not found at $pkglist_path${NC}"
         return 1
     fi
 
-    echo "DEBUG: Total packages to install: ${#packages[@]}"
+    # Enable multilib repository first
+    echo "DEBUG: Enabling multilib repository..."
+    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+        echo "DEBUG: Adding multilib repository to pacman.conf"
+        sudo bash -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
+        sudo pacman -Sy
+    else
+        echo "DEBUG: multilib repository already enabled"
+    fi
+
+    # Read and parse JSON file
+    local json_content
+    json_content=$(sudo cat "$pkglist_path")
     
-    if [ ${#packages[@]} -gt 0 ]; then
-        echo -e "${YELLOW}Installing packages with pacman...${NC}"
-        
-        # Enable multilib repository first
-        echo "DEBUG: Enabling multilib repository..."
-        if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
-            echo "DEBUG: Adding multilib repository to pacman.conf"
-            sudo bash -c 'echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf'
-            sudo pacman -Sy
-        else
-            echo "DEBUG: multilib repository already enabled"
-        fi
-        
-        # First pass: Install non-group packages
-        local regular_packages=()
-        for package in "${packages[@]}"; do
-            # Skip known group packages and AUR packages
-            if [[ "$package" != "plasma" && \
-                  "$package" != "brother-mfc-l2730dw" && \
-                  "$package" != "dislocker" && \
-                  "$package" != "moar" && \
-                  "$package" != "proton" && \
-                  "$package" != "python-pynput" && \
-                  "$package" != "python-pysmb" && \
-                  "$package" != "steam" ]]; then
-                regular_packages+=("$package")
-            fi
-        done
-        
-        if [ ${#regular_packages[@]} -gt 0 ]; then
-            echo "DEBUG: Installing ${#regular_packages[@]} regular packages"
-            if [ -n "$SUDO_PASS" ]; then
-                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${regular_packages[@]}" || true
-            else
-                sudo pacman -S --needed --noconfirm "${regular_packages[@]}" || true
-            fi
-        fi
-        
-        # Second pass: Install plasma group with all components
-        if [[ " ${packages[*]} " =~ " plasma " ]]; then
-            echo "DEBUG: Installing plasma group (all components)"
-            if [ -n "$SUDO_PASS" ]; then
-                printf "%s\nall\n" "$SUDO_PASS" | sudo -S pacman -S --needed plasma || true
-            else
-                printf "all\n" | sudo pacman -S --needed plasma || true
-            fi
-        fi
-        
-        # Third pass: Install AUR packages
-        echo -e "${YELLOW}Installing AUR packages with yay...${NC}"
-        local aur_packages=(
-            "brother-mfc-l2730dw"
-            "dislocker"
-            "moar"
-            "proton"
-            "python-pynput"
-            "python-pysmb"
-            "steam"
-        )
-        
-        for package in "${aur_packages[@]}"; do
-            if [[ " ${packages[*]} " =~ " $package " ]]; then
-                echo "DEBUG: Installing AUR package: $package"
+    # First pass: Install interactive packages
+    echo -e "${YELLOW}Installing packages that require interaction...${NC}"
+    local interactive_packages
+    interactive_packages=$(echo "$json_content" | jq -r '.interactive_packages[]' 2>/dev/null)
+    
+    if [ -n "$interactive_packages" ]; then
+        while IFS= read -r package; do
+            echo "DEBUG: Installing interactive package: $package"
+            if [ "$package" = "plasma" ]; then
                 if [ -n "$SUDO_PASS" ]; then
-                    printf "%s\n" "$SUDO_PASS" | \
-                    sudo -u "$REAL_USER" \
-                        SUDO_ASKPASS="$ASKPASS_SCRIPT" \
-                        HOME="/home/$REAL_USER" \
-                        USER="$REAL_USER" \
-                        LOGNAME="$REAL_USER" \
-                        PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
-                        yay -S --needed --noconfirm --sudoflags "-S" "$package" || true
+                    printf "%s\nall\n" "$SUDO_PASS" | sudo -S pacman -S --needed plasma || true
                 else
-                    sudo -u "$REAL_USER" \
-                        HOME="/home/$REAL_USER" \
-                        USER="$REAL_USER" \
-                        LOGNAME="$REAL_USER" \
-                        PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
-                        yay -S --needed --noconfirm "$package" || true
+                    printf "all\n" | sudo pacman -S --needed plasma || true
                 fi
             fi
-        done
+            # Add other interactive packages here if needed
+        done <<< "$interactive_packages"
+    fi
+    
+    # Second pass: Install regular pacman packages
+    echo -e "${YELLOW}Installing packages from official repositories...${NC}"
+    local pacman_packages
+    pacman_packages=$(echo "$json_content" | jq -r '.pacman_packages[]' 2>/dev/null)
+    
+    if [ -n "$pacman_packages" ]; then
+        # Convert newline-separated list to array
+        local packages=()
+        while IFS= read -r package; do
+            packages+=("$package")
+        done <<< "$pacman_packages"
+        
+        if [ ${#packages[@]} -gt 0 ]; then
+            echo "DEBUG: Installing ${#packages[@]} regular packages"
+            if [ -n "$SUDO_PASS" ]; then
+                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${packages[@]}" || true
+            else
+                sudo pacman -S --needed --noconfirm "${packages[@]}" || true
+            fi
+        fi
+    fi
+    
+    # Third pass: Install AUR packages
+    echo -e "${YELLOW}Installing AUR packages...${NC}"
+    local aur_packages
+    aur_packages=$(echo "$json_content" | jq -r '.aur_packages[]' 2>/dev/null)
+    
+    if [ -n "$aur_packages" ]; then
+        while IFS= read -r package; do
+            echo "DEBUG: Installing AUR package: $package"
+            if [ -n "$SUDO_PASS" ]; then
+                printf "%s\n" "$SUDO_PASS" | \
+                sudo -u "$REAL_USER" \
+                    SUDO_ASKPASS="$ASKPASS_SCRIPT" \
+                    HOME="/home/$REAL_USER" \
+                    USER="$REAL_USER" \
+                    LOGNAME="$REAL_USER" \
+                    PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
+                    yay -S --needed --noconfirm --sudoflags "-S" "$package" || true
+            else
+                sudo -u "$REAL_USER" \
+                    HOME="/home/$REAL_USER" \
+                    USER="$REAL_USER" \
+                    LOGNAME="$REAL_USER" \
+                    PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
+                    yay -S --needed --noconfirm "$package" || true
+            fi
+        done <<< "$aur_packages"
     fi
 }
 

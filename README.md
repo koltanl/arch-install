@@ -137,3 +137,5 @@ decrypt the drive before running the ./test-installer.sh -u command
 use the correct ip address
 using the wrong drivers
 you want to use interactive mode but haven't renamed the preseed.conf file
+sometimes the install will fail for no apparent reason, run test-installer.sh -n to redo the vm . once you log in the first time run test-installer.sh -s to save the vm state
+
