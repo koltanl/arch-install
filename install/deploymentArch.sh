@@ -27,6 +27,19 @@ fi
 # Test mode flag
 TEST_MODE=${TEST_MODE:-false}
 
+# Near the top of the file, after the initial variable declarations
+# Add better sudo password handling
+if [ -n "$SUDO_PASS" ]; then
+    # Create a temporary askpass script
+    ASKPASS_SCRIPT=$(mktemp)
+    cat > "$ASKPASS_SCRIPT" << EOF
+#!/bin/bash
+echo "$SUDO_PASS"
+EOF
+    chmod +x "$ASKPASS_SCRIPT"
+    export SUDO_ASKPASS="$ASKPASS_SCRIPT"
+fi
+
 # Function to handle errors but continue execution
 handle_error() {
     echo -e "${RED}Error: $1${NC}" >&2
@@ -40,39 +53,104 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to run sudo commands with askpass
+sudo_run() {
+    local retries=3
+    local cmd=("$@")
+    local success=false
+
+    for ((i=1; i<=retries; i++)); do
+        if [ -n "$SUDO_PASS" ]; then
+            if echo "$SUDO_PASS" | sudo -S "${cmd[@]}" 2>/dev/null; then
+                success=true
+                break
+            fi
+        elif [ -n "$SUDO_ASKPASS" ]; then
+            if sudo -A "${cmd[@]}" 2>/dev/null; then
+                success=true
+                break
+            fi
+        else
+            if sudo "${cmd[@]}" 2>/dev/null; then
+                success=true
+                break
+            fi
+        fi
+        sleep 1
+    done
+
+    if ! $success; then
+        echo "Error: Failed to run sudo command after $retries attempts"
+        return 1
+    fi
+    return 0
+}
+
+# System update function
+update_system() {
+    echo "Updating system..."
+    if ! sudo_run pacman -Syu --noconfirm; then
+        echo "Error: System update failed"
+        return 1
+    fi
+    return 0
+}
+
+# Install dependencies function
+install_dependencies() {
+    echo "Installing dependencies..."
+    if ! sudo_run pacman -S --needed --noconfirm base-devel git go unzip; then
+        echo "Error: Failed to install dependencies"
+        return 1
+    fi
+    return 0
+}
+
 # Function to install yay if not present
 install_yay() {
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install yay if not present${NC}"
-        return 0
-    fi
-
+    echo "Installing yay..."
     if ! command_exists yay; then
-        echo -e "${YELLOW}Installing yay...${NC}"
-        # Install dependencies
-        sudo pacman -S --needed git base-devel --noconfirm || handle_error "Failed to install yay dependencies"
+        if ! install_dependencies; then
+            echo "Error: Failed to install yay dependencies"
+            return 1
+        fi
         
-        # Create build directory
-        local BUILD_DIR="/tmp/yay-build"
-        rm -rf "$BUILD_DIR"
-        mkdir -p "$BUILD_DIR"
-        chown -R "$REAL_USER":"$REAL_USER" "$BUILD_DIR"
+        cd /tmp
+        rm -rf yay  # Clean up any existing directory
+        git clone https://aur.archlinux.org/yay.git
+        cd yay
         
-        # Clone and build yay as the real user
-        cd "$BUILD_DIR" || return 1
-        sudo -u "$REAL_USER" git clone https://aur.archlinux.org/yay.git "$BUILD_DIR"
-        cd "$BUILD_DIR" || return 1
-        sudo -u "$REAL_USER" makepkg -si --noconfirm
+        # Set ownership and permissions
+        if ! sudo_run chown -R "$REAL_USER:$REAL_USER" .; then
+            echo "Error: Failed to set ownership for yay build"
+            return 1
+        fi
         
-        # Clean up
-        cd /
-        rm -rf "$BUILD_DIR"
+        # Build yay
+        if ! sudo -u "$REAL_USER" makepkg -s --noconfirm; then
+            echo "Error: Failed to build yay"
+            return 1
+        fi
         
+        # Install yay package
+        local pkg=$(ls yay-*.pkg.tar.zst 2>/dev/null | head -n1)
+        if [ -n "$pkg" ]; then
+            if ! sudo_run pacman -U --noconfirm "$pkg"; then
+                echo "Error: Failed to install yay package"
+                return 1
+            fi
+        else
+            echo "Error: Could not find built yay package"
+            return 1
+        fi
+        
+        # Verify installation
         if ! command_exists yay; then
-            handle_error "Yay installation failed"
+            echo "Error: Yay installation verification failed"
             return 1
         fi
     fi
+    return 0
 }
 
 # Function to install zplug if not present
@@ -143,30 +221,39 @@ setup_dotfiles() {
         return 0
     fi
     
-    # Create necessary directories
-    mkdir -p "$REAL_HOME/.config"
-    mkdir -p "$REAL_HOME/bin"
-    mkdir -p "$REAL_HOME/.local/share"
+    # Create required directories first
+    create_required_dirs
     
-    # Set proper ownership
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config"
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/bin"
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.local"
+    # Check multiple locations for dotfiles
+    local dotfiles_locations=(
+        "/root/arch-install/dotfiles"
+        "./dotfiles"
+        "$LAUNCHDIR/dotfiles"
+        "$HOME/dotfiles"
+        "$(dirname "$0")/../dotfiles"
+    )
     
-    # Copy dotfiles
-    if [ -d "$LAUNCHDIR/dotfiles" ]; then
-        echo "Copying dotfiles from $LAUNCHDIR/dotfiles to $REAL_HOME"
-        for file in "$LAUNCHDIR/dotfiles"/.* "$LAUNCHDIR/dotfiles"/*; do
+    local dotfiles_dir=""
+    for loc in "${dotfiles_locations[@]}"; do
+        if [ -d "$loc" ]; then
+            echo "Found dotfiles in $loc"
+            dotfiles_dir="$loc"
+            break
+        fi
+    done
+    
+    if [ -n "$dotfiles_dir" ]; then
+        echo "Copying dotfiles from $dotfiles_dir to $REAL_HOME"
+        for file in "$dotfiles_dir"/.* "$dotfiles_dir"/*; do
             basename=$(basename "$file")
-            # Skip . .. and omp.json
             if [[ "$basename" != "." && "$basename" != ".." && "$basename" != "omp.json" && -f "$file" ]]; then
                 echo "Copying $basename to $REAL_HOME/"
-                cp "$file" "$REAL_HOME/$basename"
-                chown "$REAL_USER":"$REAL_USER" "$REAL_HOME/$basename"
+                sudo cp "$file" "$REAL_HOME/$basename"
+                sudo_run chown "$REAL_USER:$REAL_USER" "$REAL_HOME/$basename"
             fi
         done
     else
-        handle_error "Dotfiles directory not found at $LAUNCHDIR/dotfiles"
+        handle_error "No dotfiles directory found in known locations"
     fi
 }
 
@@ -180,7 +267,7 @@ install_oh_my_posh() {
     if ! command_exists oh-my-posh; then
         echo -e "${YELLOW}Installing oh-my-posh...${NC}"
         mkdir -p "$REAL_HOME/bin"
-        chown "$REAL_USER":"$REAL_USER" "$REAL_HOME/bin"
+        sudo_run chown "$REAL_USER:$REAL_USER" "$REAL_HOME/bin"
         sudo -u "$REAL_USER" curl -s https://ohmyposh.dev/install.sh | bash -s -- -d "$REAL_HOME/bin"
     fi
 }
@@ -209,14 +296,32 @@ setup_kitty() {
 
     # Create kitty config directory
     mkdir -p "$REAL_HOME/.config/kitty"
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/kitty"
+    sudo_run chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config/kitty"
 
-    # Copy kitty configuration files
-    if [ -d "$LAUNCHDIR/kitty" ]; then
-        cp -r "$LAUNCHDIR/kitty/"* "$REAL_HOME/.config/kitty/" 2>/dev/null || true
-        chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/kitty"
+    # Look for kitty configs in multiple locations
+    local kitty_locations=(
+        "/root/arch-install/kitty"
+        "./kitty"
+        "$LAUNCHDIR/kitty"
+        "$HOME/kitty"
+        "$(dirname "$0")/../kitty"
+    )
+    
+    local kitty_dir=""
+    for loc in "${kitty_locations[@]}"; do
+        if [ -d "$loc" ]; then
+            echo "Found kitty config in $loc"
+            kitty_dir="$loc"
+            break
+        fi
+    done
+    
+    if [ -n "$kitty_dir" ]; then
+        echo "Copying kitty configuration from $kitty_dir"
+        sudo cp -r "$kitty_dir"/* "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        sudo_run chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config/kitty"
     else
-        handle_error "Kitty configuration directory not found"
+        handle_error "Kitty configuration directory not found in known locations"
     fi
 }
 
@@ -304,89 +409,111 @@ setup_omp() {
     local config_dir="$REAL_HOME/.config"
     mkdir -p "$config_dir"
     
-    cp "$LAUNCHDIR/dotfiles/omp.json" "$config_dir/"
-    chown "$REAL_USER":"$REAL_USER" "$config_dir/omp.json"
+    # Look for omp.json in multiple locations
+    local omp_locations=(
+        "/root/arch-install/dotfiles/omp.json"
+        "./dotfiles/omp.json"
+        "$LAUNCHDIR/dotfiles/omp.json"
+        "$HOME/dotfiles/omp.json"
+        "$(dirname "$0")/../dotfiles/omp.json"
+    )
+    
+    local omp_file=""
+    for loc in "${omp_locations[@]}"; do
+        if [ -f "$loc" ]; then
+            echo "Found omp.json in $loc"
+            omp_file="$loc"
+            break
+        fi
+    done
+    
+    if [ -n "$omp_file" ]; then
+        echo "Copying oh-my-posh configuration from $omp_file"
+        sudo cp "$omp_file" "$config_dir/omp.json"
+        sudo_run chown "$REAL_USER:$REAL_USER" "$config_dir/omp.json"
+    else
+        handle_error "Could not find omp.json in known locations"
+    fi
 }
 
 # Function to install nnn from source with nerd fonts support
 install_nnn() {
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install nnn from source with nerd fonts support${NC}"
-        return 0
+    echo "Installing nnn and required fonts..."
+    echo "Installing dependencies and fonts..."
+    if ! sudo_run pacman -S --needed --noconfirm gcc make pkg-config ncurses readline git; then
+        echo "Error: Failed to install dependencies"
+        return 1
     fi
-
-    echo -e "${YELLOW}Installing nnn and required fonts...${NC}"
     
-    # Install build dependencies and required fonts
-    local deps=(
-        "gcc"
-        "make"
-        "pkg-config"
-        "ncurses"
-        "readline"
-        "git"
-        "ttf-jetbrains-mono-nerd"
-        "ttf-nerd-fonts-symbols"
-    )
-    
-    echo -e "${YELLOW}Installing dependencies and fonts...${NC}"
-    sudo pacman -S --needed --noconfirm "${deps[@]}" || handle_error "Failed to install dependencies"
-    
-    # Create temporary build directory in user's home
-    local BUILD_DIR="$REAL_HOME/.tmp/nnn-build"
+    # Create and clean build directory
+    local BUILD_DIR="/tmp/nnn-build"
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
-    chown -R "$REAL_USER":"$REAL_USER" "$BUILD_DIR"
+    cd "$BUILD_DIR"
     
-    # Clone and build nnn with nerd fonts support
-    echo -e "${YELLOW}Cloning and building nnn with nerd fonts support...${NC}"
-    cd "$BUILD_DIR" || return 1
-    sudo -u "$REAL_USER" git clone https://github.com/jarun/nnn.git .
-    cd nnn || return 1
-    sudo -u "$REAL_USER" make O_NERD=1 || handle_error "Failed to build nnn"
-    sudo make install || handle_error "Failed to install nnn"
-    
-    # Setup nnn plugins directory
-    if [ ! -d "$REAL_HOME/.config/nnn/plugins" ]; then
-        echo -e "${YELLOW}Setting up nnn plugins...${NC}"
-        mkdir -p "$REAL_HOME/.config/nnn/plugins"
-        sudo -u "$REAL_USER" sh -c "curl -Ls https://raw.githubusercontent.com/jarun/nnn/master/plugins/getplugs | sh -s -- '$REAL_HOME/.config/nnn/plugins'"
+    # Clone and build nnn
+    echo "Cloning and building nnn with nerd fonts support..."
+    git clone https://github.com/jarun/nnn.git .
+    make O_NERD=1
+    if ! sudo_run make install; then
+        echo "Error: Failed to install nnn"
+        return 1
     fi
     
-    # Set proper ownership
-    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/nnn"
-    
-    # Cleanup build directory
-    cd /
-    rm -rf "$BUILD_DIR"
+    return 0
 }
 
 # Function to change default shell to zsh
 change_shell_to_zsh() {
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would change default shell to zsh for $REAL_USER${NC}"
-        return 0
+    echo "Changing default shell to zsh..."
+    if ! sudo_run pacman -S --needed --noconfirm zsh; then
+        return 1
     fi
+    
+    echo "Changing shell for $USERNAME to zsh..."
+    if ! sudo_run chsh -s /bin/zsh "$USERNAME"; then
+        echo "Error: Failed to change shell to zsh"
+        return 1
+    fi
+    return 0
+}
 
-    echo -e "${YELLOW}Changing default shell to zsh...${NC}"
+# Add a function to create required directories
+create_required_dirs() {
+    echo "Creating required directories..."
+    local dirs=(
+        "$REAL_HOME/.config"
+        "$REAL_HOME/.config/kitty"
+        "$REAL_HOME/bin"
+        "$REAL_HOME/.local/share"
+        "$REAL_HOME/.config/plasma"
+        "$REAL_HOME/.config/kdedefaults"
+    )
     
-    # Ensure zsh is installed
-    if ! command_exists zsh; then
-        echo -e "${YELLOW}Installing zsh...${NC}"
-        sudo pacman -S --needed --noconfirm zsh || handle_error "Failed to install zsh"
+    for dir in "${dirs[@]}"; do
+        mkdir -p "$dir"
+        sudo_run chown -R "$REAL_USER:$REAL_USER" "$dir"
+    done
+}
+
+# Add a function to verify sudo access
+verify_sudo_access() {
+    echo "Verifying sudo access..."
+    if ! sudo_run true; then
+        echo "Error: Could not verify sudo access"
+        return 1
     fi
-    
-    # Change shell for the user
-    if [ "$(getent passwd "$REAL_USER" | cut -d: -f7)" != "/usr/bin/zsh" ]; then
-        echo -e "${YELLOW}Changing shell for $REAL_USER to zsh...${NC}"
-        sudo chsh -s /usr/bin/zsh "$REAL_USER" || handle_error "Failed to change shell to zsh"
-    else
-        echo -e "${GREEN}Shell is already set to zsh for $REAL_USER${NC}"
-    fi
+    return 0
 }
 
 # Main installation process
 main() {
+    # Verify sudo access before proceeding
+    if ! verify_sudo_access; then
+        echo -e "${RED}Error: Could not obtain sudo access. Please check your permissions.${NC}"
+        exit 1
+    fi
+
     # Check if running on Arch Linux
     if [ ! -f "/etc/arch-release" ]; then
         echo -e "${RED}This script is designed for Arch Linux. Exiting...${NC}"
@@ -426,12 +553,19 @@ main() {
         done
     fi
 
-    echo -e "${GREEN}Installation complete! Please log out and log back in for all changes to take effect.${NC}"
-
-    # Clean up installation files; ALWAYS KEEP THIS AT END OF SCRIPT
+    # Clean up installation files with proper permissions
     echo -e "${YELLOW}Cleaning up installation files...${NC}"
     cd /
-    rm -rf "$LAUNCHDIR"
+    if [ -d "$LAUNCHDIR" ]; then
+        sudo_run rm -rf "$LAUNCHDIR" || echo "Warning: Could not remove $LAUNCHDIR"
+    fi
+    
+    # Clean up temporary files
+    if [ -n "$ASKPASS_SCRIPT" ] && [ -f "$ASKPASS_SCRIPT" ]; then
+        rm -f "$ASKPASS_SCRIPT" || echo "Warning: Could not remove askpass script"
+    fi
+    
+    echo -e "${GREEN}Installation complete! Please log out and log back in for all changes to take effect.${NC}"
 }
 
 # Run the script
