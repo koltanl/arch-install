@@ -5,7 +5,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
-
+LAUNCHDIR="/root/arch-install"
 # Error handling
 set -e
 trap 'echo -e "${RED}An error occurred. GRUB theme installation failed.${NC}" >&2' ERR
@@ -18,13 +18,19 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Check if LAUNCHDIR is set
+if [ -z "$LAUNCHDIR" ]; then
+    echo -e "${RED}LAUNCHDIR environment variable is not set${NC}"
+    exit 1
+fi
+
 echo -e "${YELLOW}Installing GRUB theme...${NC}"
 
 # Create theme directory
 mkdir -p "$THEME_DIR"
 
-# Extract theme
-tar xf torun/arch-linux-grub-theme.tar -C "$THEME_DIR"
+# Extract theme using absolute path
+tar xf "$LAUNCHDIR/torun/arch-linux-grub-theme.tar" -C "$THEME_DIR"
 
 # Backup existing GRUB config
 if [ ! -f "/etc/default/grub.backup" ]; then

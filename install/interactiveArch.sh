@@ -594,15 +594,6 @@ HOME_UUID=$(blkid -s UUID -o value "${DISK}${PART_SUFFIX}4")
 sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${HOME_UUID}':crypthome"/' /etc/default/grub
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# Install yay
-pacman -S --needed git go base-devel --noconfirm
-sudo -u "${USERNAME}" bash -c "
-    cd ~
-    git clone https://aur.archlinux.org/yay.git
-    cd yay
-    makepkg -si --noconfirm
-"
-
 # Install desktop environment and utilities
 pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta \
     "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" networkmanager dhclient \
@@ -617,28 +608,6 @@ systemctl enable bluetooth
 
 # Add user to libvirt group
 usermod -aG libvirt "${USERNAME}"
-
-
-# Create a systemd user service for first-login deployment
-cat > /etc/systemd/system/first-login-deploy.service <<'EOF'
-[Unit]
-Description=First Login Deployment Script
-After=plasma-core.target
-
-[Service]
-Type=oneshot
-ExecStart=/root/arch-install/install/deploymentArch.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=plasma-workspace.target
-EOF
-
-# Enable the service
-systemctl enable first-login-deploy.service
-
-# Create a flag file to track if deployment has run
-touch /var/lib/first-login-deploy
 
 CHROOT
 

@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Add at the beginning of deploymentArch.sh
-if [ ! -f "/var/lib/first-login-deploy" ]; then
-    echo "First-login deployment already completed"
-    systemctl disable --now first-login-deploy
-    exit 0
-fi
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -112,15 +105,20 @@ setup_dotfiles() {
     mkdir -p "$HOME/.local/share"  # Some apps need this
     
     # Copy dotfiles
-    for file in dotfiles/.*; do
-        if [ -f "$file" ]; then
+    if [ -d "$LAUNCHDIR/dotfiles" ]; then
+        echo "Copying dotfiles from $LAUNCHDIR/dotfiles"
+        # Copy all dotfiles, including hidden ones
+        for file in "$LAUNCHDIR/dotfiles"/.* "$LAUNCHDIR/dotfiles"/*; do
             basename=$(basename "$file")
-            if [ "$basename" != "." ] && [ "$basename" != ".." ]; then
+            # Skip . and .. directory entries and non-existent files (from empty globs)
+            if [[ "$basename" != "." && "$basename" != ".." && -f "$file" ]]; then
                 echo "Copying $basename to $HOME/"
                 cp "$file" "$HOME/$basename"
             fi
-        fi
-    done
+        done
+    else
+        handle_error "Dotfiles directory not found at $LAUNCHDIR/dotfiles"
+    fi
 }
 
 # Function to install oh-my-posh
@@ -166,9 +164,9 @@ setup_kitty() {
 
     # Copy kitty configuration files
     if [ -d "$LAUNCHDIR/kitty" ]; then
-        cp -r "$LAUNCHDIR/kitty/*" "$HOME/.config/kitty/"
+        cp -r "$LAUNCHDIR/kitty/"* "$HOME/.config/kitty/" 2>/dev/null || true
     else
-        echo -e "${RED}Warning: kitty configuration directory not found${NC}"
+        handle_error "Kitty configuration directory not found"
     fi
 }
 
@@ -197,17 +195,17 @@ setup_kde() {
     
     # Copy KWin configurations
     if [ -d "$LAUNCHDIR/kde/kwin" ]; then
-        cp "$LAUNCHDIR/kde/kwin/*" "$kde_config_dir/"
+        cp "$LAUNCHDIR/kde/kwin/"* "$kde_config_dir/" 2>/dev/null || true
     fi
     
     # Copy shortcuts
     if [ -d "$LAUNCHDIR/kde/shortcuts" ]; then
-        cp "$LAUNCHDIR/kde/shortcuts/*" "$kde_config_dir/"
+        cp "$LAUNCHDIR/kde/shortcuts/"* "$kde_config_dir/" 2>/dev/null || true
     fi
     
     # Copy Plasma configurations
     if [ -d "$LAUNCHDIR/kde/plasma" ]; then
-        cp -r "$LAUNCHDIR/kde/plasma/*" "$kde_config_dir/"
+        cp -r "$LAUNCHDIR/kde/plasma/"* "$kde_config_dir/" 2>/dev/null || true
     fi
     
     # Copy theme configurations
@@ -232,14 +230,14 @@ setup_scripts() {
     mkdir -p "$bin_dir"
     
     # Create utils subdirectory if it exists in source
-    if [ -d "scripts/utils" ]; then
+    if [ -d "$LAUNCHDIR/scripts/utils" ]; then
         mkdir -p "$bin_dir/utils"
-        cp "$LAUNCHDIR/scripts/utils/*.sh" "$bin_dir/utils/" 2>/dev/null || true
+        cp "$LAUNCHDIR/scripts/utils/"*.sh "$bin_dir/utils/" 2>/dev/null || true
     fi
     
     # Copy scripts with error suppression
-    cp "$LAUNCHDIR/scripts/*.sh" "$bin_dir/" 2>/dev/null || true
-    cp "$LAUNCHDIR/scripts/*.py" "$bin_dir/" 2>/dev/null || true
+    cp "$LAUNCHDIR/scripts/"*.sh "$bin_dir/" 2>/dev/null || true
+    cp "$LAUNCHDIR/scripts/"*.py "$bin_dir/" 2>/dev/null || true
     
     # Make everything executable
     find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
@@ -310,7 +308,3 @@ main() {
 
 # Run the script
 main 
-
-# At the end of the script
-rm -f /var/lib/first-login-deploy
-systemctl disable --now first-login-deploy 
