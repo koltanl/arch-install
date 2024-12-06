@@ -97,7 +97,7 @@ install_packages() {
     if [ "$TEST_MODE" = true ]; then
         echo -e "${YELLOW}TEST MODE: Would install packages from pkglist.txt${NC}"
         return 0
-    }
+    fi
     
     # Define the correct path to pkglist.txt
     local pkglist_path="$LAUNCHDIR/install/pkglist.txt"
@@ -105,8 +105,7 @@ install_packages() {
     if [ ! -f "$pkglist_path" ]; then
         echo -e "${RED}Error: pkglist.txt not found at $pkglist_path${NC}"
         return 1
-    }
-    
+    fi    
     # Enable multilib repository if not already enabled
     if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
         echo -e "${YELLOW}Enabling multilib repository...${NC}"
@@ -311,7 +310,81 @@ setup_omp() {
     chown "$REAL_USER":"$REAL_USER" "$config_dir/omp.json"
 }
 
+# Function to install nnn from source with nerd fonts support
+install_nnn() {
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${YELLOW}TEST MODE: Would install nnn from source with nerd fonts support${NC}"
+        return 0
+    fi
 
+    echo -e "${YELLOW}Installing nnn and required fonts...${NC}"
+    
+    # Install build dependencies and required fonts
+    local deps=(
+        "gcc"
+        "make"
+        "pkg-config"
+        "ncurses"
+        "readline"
+        "git"
+        "ttf-jetbrains-mono-nerd"
+        "ttf-nerd-fonts-symbols"
+    )
+    
+    echo -e "${YELLOW}Installing dependencies and fonts...${NC}"
+    sudo pacman -S --needed --noconfirm "${deps[@]}" || handle_error "Failed to install dependencies"
+    
+    # Create temporary build directory
+    local BUILD_DIR="/tmp/nnn-build"
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+    cd "$BUILD_DIR" || return 1
+    
+    # Clone and build nnn with nerd fonts support
+    echo -e "${YELLOW}Cloning and building nnn with nerd fonts support...${NC}"
+    sudo -u "$REAL_USER" git clone https://github.com/jarun/nnn.git .
+    cd nnn || return 1
+    sudo -u "$REAL_USER" make O_NERD=1 || handle_error "Failed to build nnn"
+    sudo make install || handle_error "Failed to install nnn"
+    
+    # Setup nnn plugins directory
+    if [ ! -d "$REAL_HOME/.config/nnn/plugins" ]; then
+        echo -e "${YELLOW}Setting up nnn plugins...${NC}"
+        mkdir -p "$REAL_HOME/.config/nnn/plugins"
+        sudo -u "$REAL_USER" sh -c "curl -Ls https://raw.githubusercontent.com/jarun/nnn/master/plugins/getplugs | sh -s -- '$REAL_HOME/.config/nnn/plugins'"
+    fi
+    
+    # Set proper ownership
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/nnn"
+    
+    # Cleanup build directory
+    cd /
+    rm -rf "$BUILD_DIR"
+}
+
+# Function to change default shell to zsh
+change_shell_to_zsh() {
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${YELLOW}TEST MODE: Would change default shell to zsh for $REAL_USER${NC}"
+        return 0
+    }
+
+    echo -e "${YELLOW}Changing default shell to zsh...${NC}"
+    
+    # Ensure zsh is installed
+    if ! command_exists zsh; then
+        echo -e "${YELLOW}Installing zsh...${NC}"
+        sudo pacman -S --needed --noconfirm zsh || handle_error "Failed to install zsh"
+    fi
+    
+    # Change shell for the user
+    if [ "$(getent passwd "$REAL_USER" | cut -d: -f7)" != "/usr/bin/zsh" ]; then
+        echo -e "${YELLOW}Changing shell for $REAL_USER to zsh...${NC}"
+        sudo chsh -s /usr/bin/zsh "$REAL_USER" || handle_error "Failed to change shell to zsh"
+    else
+        echo -e "${GREEN}Shell is already set to zsh for $REAL_USER${NC}"
+    fi
+}
 
 # Main installation process
 main() {
@@ -332,6 +405,8 @@ main() {
     # Install core dependencies
     install_yay || handle_error "Yay installation failed"
     install_packages || handle_error "Package installation failed"
+    install_nnn || handle_error "NNN installation failed"
+    change_shell_to_zsh || handle_error "Shell change failed"
     install_zplug || handle_error "Zplug installation failed"
     install_oh_my_posh || handle_error "Oh-my-posh installation failed"
     install_atuin || handle_error "Atuin installation failed"
