@@ -235,7 +235,8 @@ setup_dotfiles() {
     
     local dotfiles_dir=""
     for loc in "${dotfiles_locations[@]}"; do
-        if [ -d "$loc" ]; then
+        # Use sudo to check directory existence
+        if sudo test -d "$loc"; then
             echo "Found dotfiles in $loc"
             dotfiles_dir="$loc"
             break
@@ -244,9 +245,10 @@ setup_dotfiles() {
     
     if [ -n "$dotfiles_dir" ]; then
         echo "Copying dotfiles from $dotfiles_dir to $REAL_HOME"
-        for file in "$dotfiles_dir"/.* "$dotfiles_dir"/*; do
+        # Use sudo to list and copy files
+        sudo find "$dotfiles_dir" -maxdepth 1 -type f -name ".*" -o -type f -name "*" | while read -r file; do
             basename=$(basename "$file")
-            if [[ "$basename" != "." && "$basename" != ".." && "$basename" != "omp.json" && -f "$file" ]]; then
+            if [[ "$basename" != "." && "$basename" != ".." && "$basename" != "omp.json" ]]; then
                 echo "Copying $basename to $REAL_HOME/"
                 sudo cp "$file" "$REAL_HOME/$basename"
                 sudo_run chown "$REAL_USER:$REAL_USER" "$REAL_HOME/$basename"
@@ -309,7 +311,7 @@ setup_kitty() {
     
     local kitty_dir=""
     for loc in "${kitty_locations[@]}"; do
-        if [ -d "$loc" ]; then
+        if sudo test -d "$loc"; then
             echo "Found kitty config in $loc"
             kitty_dir="$loc"
             break
@@ -318,7 +320,22 @@ setup_kitty() {
     
     if [ -n "$kitty_dir" ]; then
         echo "Copying kitty configuration from $kitty_dir"
-        sudo cp -r "$kitty_dir"/* "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        # Copy config files first
+        sudo cp "$kitty_dir/kitty.conf" "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        sudo cp "$kitty_dir/theme.conf" "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        
+        # Copy themes directory if it exists
+        if sudo test -d "$kitty_dir/kitty-themes"; then
+            sudo cp -r "$kitty_dir/kitty-themes" "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        fi
+        
+        # Copy terminal images if they exist
+        for img in terminal.png 0terminal.png 1terminal.png; do
+            if sudo test -f "$kitty_dir/$img"; then
+                sudo cp "$kitty_dir/$img" "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+            fi
+        done
+        
         sudo_run chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config/kitty"
     else
         handle_error "Kitty configuration directory not found in known locations"
@@ -384,18 +401,40 @@ setup_scripts() {
     local bin_dir="$REAL_HOME/bin"
     mkdir -p "$bin_dir"
     
-    # Create utils subdirectory if it exists in source
-    if [ -d "$LAUNCHDIR/scripts/utils" ]; then
-        mkdir -p "$bin_dir/utils"
-        cp "$LAUNCHDIR/scripts/utils/"*.sh "$bin_dir/utils/" 2>/dev/null || true
+    # Look for scripts in multiple locations
+    local scripts_locations=(
+        "/root/arch-install/scripts"
+        "./scripts"
+        "$LAUNCHDIR/scripts"
+        "$(dirname "$0")/../scripts"
+    )
+    
+    local scripts_dir=""
+    for loc in "${scripts_locations[@]}"; do
+        if sudo test -d "$loc"; then
+            echo "Found scripts in $loc"
+            scripts_dir="$loc"
+            break
+        fi
+    done
+    
+    if [ -n "$scripts_dir" ]; then
+        # Create utils subdirectory if it exists in source
+        if sudo test -d "$scripts_dir/utils"; then
+            mkdir -p "$bin_dir/utils"
+            sudo cp "$scripts_dir/utils/"*.{sh,py} "$bin_dir/utils/" 2>/dev/null || true
+        fi
+        
+        # Copy scripts with error suppression
+        sudo cp "$scripts_dir/"*.sh "$bin_dir/" 2>/dev/null || true
+        sudo cp "$scripts_dir/"*.py "$bin_dir/" 2>/dev/null || true
+        
+        # Make everything executable and fix ownership
+        sudo find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
+        sudo_run chown -R "$REAL_USER:$REAL_USER" "$bin_dir"
+    else
+        handle_error "Scripts directory not found in known locations"
     fi
-    
-    # Copy scripts with error suppression
-    cp "$LAUNCHDIR/scripts/"*.sh "$bin_dir/" 2>/dev/null || true
-    cp "$LAUNCHDIR/scripts/"*.py "$bin_dir/" 2>/dev/null || true
-    
-    # Make everything executable
-    find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
 }
 
 # Function to setup oh-my-posh theme
@@ -420,7 +459,7 @@ setup_omp() {
     
     local omp_file=""
     for loc in "${omp_locations[@]}"; do
-        if [ -f "$loc" ]; then
+        if sudo test -f "$loc"; then
             echo "Found omp.json in $loc"
             omp_file="$loc"
             break
