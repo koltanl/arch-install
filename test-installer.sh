@@ -1,52 +1,58 @@
 #!/bin/bash
 set -euo pipefail
 
+# First define basic variables
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_NAME="arch-install-test"
 ISO_PATH="$SCRIPT_DIR/isoout/archlinux-*.iso"
 VM_DISK_PATH="$HOME/.local/share/libvirt/images/$VM_NAME.qcow2"
 VM_DISK_SIZE="40"
-ROOT_PASSWORD="2312"  # Default password matching preseedArch.sh
+PRESEED_CONF="$SCRIPT_DIR/install/preseed.conf"
+VM_STATE_DIR="$SCRIPT_DIR/vm_states"
+DEBUG=0
+DEPLOYMENT_SCRIPT="install/deploymentArch.sh"
+REMOTE_DEPLOYMENT_PATH="/root/deploymentArch.sh"
 SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
 VM_IP="192.168.111.111"
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
-DEBUG=0
+
+# Source credentials from preseed.conf
+if [ -f "$PRESEED_CONF" ]; then
+    # Use grep and cut to extract values, with error checking
+    ROOT_PASSWORD=$(grep "^ROOT_PASSWORD=" "$PRESEED_CONF" | cut -d'"' -f2)
+    USERNAME=$(grep "^USERNAME=" "$PRESEED_CONF" | cut -d'"' -f2)
+    
+    if [ -z "$ROOT_PASSWORD" ]; then
+        echo "Error: Could not extract ROOT_PASSWORD from preseed.conf"
+        exit 1
+    fi
+    if [ -z "$USERNAME" ]; then
+        echo "Error: Could not extract USERNAME from preseed.conf"
+        exit 1
+    fi
+else
+    echo "Error: preseed.conf not found at $PRESEED_CONF"
+    exit 1
+fi
+
+# Now define variables that depend on preseed values
+SSH_USER="$USERNAME"
+SSH_PASS="$ROOT_PASSWORD"
 
 # Function to show usage
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  --refresh, -r     Redeploy VM using existing ISO without rebuilding"
-    echo "  --skip-build      Skip ISO build, use existing ISO"
     echo "  --no-build       Skip ISO build, use existing ISO"
-    echo "  --quick          Quick redeploy without rebuilding ISO"
+    echo "  --fresh          Start fresh VM from ISO (default behavior)"
     echo "  --debug, -d      Enable debug output for build and installation"
-    echo "  --help           Show this help message"
+    echo "  --update-deploy  Update and run deployment script on VM"
+    echo "  --save          Save current VM state"
+    echo "  --restore       Restore VM from saved state"
+    echo "  --help          Show this help message"
     exit 1
 }
-
-# Parse command line arguments
-REBUILD_ISO=true
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --refresh|-r|--skip-build|--no-build|--quick)
-            REBUILD_ISO=false
-            shift
-            ;;
-        --debug|-d)
-            DEBUG=1
-            shift
-            ;;
-        --help)
-            show_usage
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_usage
-            ;;
-    esac
-done
 
 # Function for cleanup
 cleanup() {
@@ -103,6 +109,168 @@ cleanup() {
     
     echo "Cleanup completed"
 }
+
+# Define save and restore functions
+save_vm_state() {
+    local state_dir="$1"
+    echo "Saving VM state to $state_dir..."
+    
+    # Ensure VM is shut down
+    sudo virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
+    
+    # Create state directory
+    mkdir -p "$state_dir"
+    
+    # Copy disk image
+    if [ -f "$VM_DISK_PATH" ]; then
+        echo "Copying disk image..."
+        cp "$VM_DISK_PATH" "$state_dir/disk.qcow2"
+    else
+        echo "Error: VM disk image not found"
+        return 1
+    fi
+    
+    # Export VM configuration
+    echo "Saving VM configuration..."
+    sudo virsh --connect qemu:///system dumpxml "$VM_NAME" > "$state_dir/config.xml"
+    
+    echo "VM state saved successfully"
+    return 0
+}
+
+restore_vm_state() {
+    local state_dir="$1"
+    
+    if [ ! -d "$state_dir" ]; then
+        echo "Error: No saved state found in $state_dir"
+        return 1
+    fi
+    
+    echo "Restoring VM state from $state_dir..."
+    
+    # Clean up existing VM
+    cleanup
+    
+    # Restore disk image
+    echo "Restoring disk image..."
+    cp "$state_dir/disk.qcow2" "$VM_DISK_PATH"
+    
+    # Restore VM configuration
+    echo "Restoring VM configuration..."
+    sudo virsh --connect qemu:///system define "$state_dir/config.xml"
+    
+    echo "VM state restored successfully"
+    return 0
+}
+
+# Parse command line arguments
+REBUILD_ISO=true
+UPDATE_DEPLOY=false
+SAVE_STATE=false
+RESTORE=false
+FRESH_START=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-build|-n)
+            REBUILD_ISO=false
+            shift
+            ;;
+        --fresh|-f)
+            FRESH_START=true
+            shift
+            ;;
+        --debug|-d)
+            DEBUG=1
+            shift
+            ;;
+        --update-deploy|-u)
+            UPDATE_DEPLOY=true
+            shift
+            ;;
+        --save|-s)
+            SAVE_STATE=true
+            shift
+            ;;
+        --restore|-r)
+            RESTORE=true
+            REBUILD_ISO=false
+            shift
+            ;;
+        --help|-h)
+            show_usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_usage
+            ;;
+    esac
+done
+
+# Add this near the start of the main execution flow
+if [ "$FRESH_START" = true ]; then
+    echo "Starting fresh VM from ISO..."
+    # The rest of the script will continue with normal VM creation
+    # No need for additional code since this is the default behavior
+elif [ "$SAVE_STATE" = true ]; then
+    save_vm_state "$VM_STATE_DIR"
+    exit 0
+elif [ "$RESTORE" = true ]; then
+    # Try both state directories, preferring no_iso state if it exists
+    if [ -d "$VM_STATE_DIR" ]; then
+        restore_vm_state "$VM_STATE_DIR"
+    else
+        echo "Error: No saved VM state found"
+        exit 1
+    fi
+    sudo virsh --connect qemu:///system start "$VM_NAME"
+    exit 0
+fi
+
+# Add these functions before the main execution flow
+wait_for_ssh() {
+    local retries=30
+    local wait_time=10
+    
+    echo "Waiting for SSH to become available..."
+    for ((i=1; i<=retries; i++)); do
+        if sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${SSH_USER}@${VM_IP}" "exit" >/dev/null 2>&1; then
+            echo "SSH connection established!"
+            return 0
+        fi
+        echo "Attempt $i/$retries - SSH not ready, waiting ${wait_time}s..."
+        sleep $wait_time
+    done
+    
+    echo "Failed to establish SSH connection after $retries attempts"
+    return 1
+}
+
+update_deployment_script() {
+    echo "Updating deployment script on VM..."
+    if ! sshpass -p "$SSH_PASS" scp -o StrictHostKeyChecking=no "$DEPLOYMENT_SCRIPT" "${SSH_USER}@${VM_IP}:${REMOTE_DEPLOYMENT_PATH}"; then
+        echo "Failed to copy deployment script to VM"
+        return 1
+    fi
+    
+    echo "Running updated deployment script..."
+    if ! sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${VM_IP}" "chmod +x ${REMOTE_DEPLOYMENT_PATH} && ${REMOTE_DEPLOYMENT_PATH}"; then
+        echo "Failed to execute deployment script on VM"
+        return 1
+    fi
+    
+    echo "Deployment script update completed successfully"
+    return 0
+}
+
+# Add this near the end of the script, after the VM is created and booted
+if [ "$UPDATE_DEPLOY" = true ]; then
+    if wait_for_ssh; then
+        update_deployment_script
+    else
+        echo "Failed to establish SSH connection to update deployment script"
+        exit 1
+    fi
+fi
 
 # Ensure cleanup is called both on error and before creating new VM
 trap cleanup ERR
@@ -282,3 +450,4 @@ To destroy the test VM when done:
     virsh --connect qemu:///system destroy $VM_NAME
     virsh --connect qemu:///system undefine $VM_NAME --remove-all-storage
 -------------------------------------------------------------------------------" 
+
