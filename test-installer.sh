@@ -322,9 +322,8 @@ update_deployment_script() {
     fi
     
     echo "Running updated deployment script..."
-    # Use heredoc with set -x for debugging and proper error handling
+    # Use heredoc for debugging and proper error handling
     if ! sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${VM_IP}" /bin/bash << EOF
-        set -x  # Enable command tracing
         
         # Create askpass script
         cat > /home/${SSH_USER}/askpass.sh << 'ASKPASS'
