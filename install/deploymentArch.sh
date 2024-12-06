@@ -232,11 +232,7 @@ install_packages() {
             [ -z "$package" ] && continue
             echo "DEBUG: Installing interactive package: $package"
             if [ "$package" = "plasma" ]; then
-                if [ -n "$SUDO_PASS" ]; then
-                    printf "%s\nall\n" "$SUDO_PASS" | sudo -S pacman -S --needed plasma || true
-                else
-                    printf "all\n" | sudo pacman -S --needed plasma || true
-                fi
+                    { echo "1"; } | sudo -S pacman -S --needed --noconfirm plasma || true
             fi
         done <<< "$interactive_packages"
     fi
@@ -258,17 +254,40 @@ install_packages() {
         done <<< "$pacman_packages"
         
         if [ ${#packages[@]} -gt 0 ]; then
-            echo "DEBUG: Installing ${#packages[@]} regular packages"
-            echo "DEBUG: Package list: ${packages[*]}"
-            if [ -n "$SUDO_PASS" ]; then
-                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${packages[@]}" || {
-                    echo -e "${RED}Warning: Some packages failed to install${NC}"
-                }
-            else
-                sudo pacman -S --needed --noconfirm "${packages[@]}" || {
-                    echo -e "${RED}Warning: Some packages failed to install${NC}"
-                }
-            fi
+            echo "DEBUG: Installing ${#packages[@]} regular packages in batches"
+            
+            # Process packages in batches of 32
+            local batch_size=32
+            local total_packages=${#packages[@]}
+            local batch_count=$(( (total_packages + batch_size - 1) / batch_size ))
+            
+            for ((i = 0; i < batch_count; i++)); do
+                local start=$((i * batch_size))
+                local end=$((start + batch_size))
+                # Ensure we don't go past the array bounds
+                if [ $end -gt $total_packages ]; then
+                    end=$total_packages
+                fi
+                
+                echo "DEBUG: Installing batch $((i+1))/$batch_count (packages $((start+1))-$end of $total_packages)"
+                
+                # Extract the current batch of packages
+                local current_batch=("${packages[@]:start:batch_size}")
+                
+                if [ -n "$SUDO_PASS" ]; then
+                    printf "%s\n" "$SUDO_PASS" | \
+                        sudo -S pacman -S --needed --noconfirm "${current_batch[@]}" || {
+                            echo -e "${RED}Warning: Some packages in batch $((i+1)) failed to install${NC}"
+                        }
+                else
+                    sudo pacman -S --needed --noconfirm "${current_batch[@]}" || {
+                        echo -e "${RED}Warning: Some packages in batch $((i+1)) failed to install${NC}"
+                    }
+                fi
+                
+                # Small delay between batches to allow system to settle
+                sleep 1
+            done
         else
             echo "DEBUG: No regular packages to install"
         fi

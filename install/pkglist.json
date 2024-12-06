@@ -172,7 +172,6 @@
         "xf86-video-amdgpu",
         "xorg-server",
         "xorg-xwayland",
-        "yay",
         "zsh",
         "ttf-nerd-fonts-symbols",
         "lib32-alsa-lib",
