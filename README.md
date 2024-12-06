@@ -75,6 +75,24 @@ sudo fdisk -l
 
 For detailed installation instructions, see [install/README.md](install/README.md)
 
+## Post-Installation Setup
+
+After completing the base installation and booting into your new system for the first time:
+
+1. Log in with your user credentials
+2. Run the deployment script to complete the setup:
+```bash
+sudo sh /root/arch-install/install/deploymentArch.sh
+```
+This script will:
+- Configure your desktop environment
+- Install additional packages
+- Set up development tools
+- Configure system services
+- Apply custom configurations
+
+> **Note**: The deployment script will automatically handle all post-installation configurations.
+
 ## Testing the Installation
 
 ### Using the VM Tester
@@ -127,3 +145,4 @@ This testing environment allows for rapid iteration and validation of the instal
 - Use `--quick` or `-r` when iterating on VM-related changes
 - Use full build when testing ISO or installation script changes
 - The VM's disk image is stored in your home directory at `~/.local/share/libvirt/images/`
+

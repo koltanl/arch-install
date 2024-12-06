@@ -97,7 +97,15 @@ install_packages() {
     if [ "$TEST_MODE" = true ]; then
         echo -e "${YELLOW}TEST MODE: Would install packages from pkglist.txt${NC}"
         return 0
-    fi
+    }
+    
+    # Define the correct path to pkglist.txt
+    local pkglist_path="$LAUNCHDIR/install/pkglist.txt"
+    
+    if [ ! -f "$pkglist_path" ]; then
+        echo -e "${RED}Error: pkglist.txt not found at $pkglist_path${NC}"
+        return 1
+    }
     
     # Enable multilib repository if not already enabled
     if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
@@ -112,7 +120,7 @@ install_packages() {
         # Skip empty lines and comments
         [[ -z "$package" || "$package" =~ ^# ]] && continue
         packages+=("$package")
-    done < pkglist.txt
+    done < "$pkglist_path"
     
     # Install all packages in a single pacman command
     if [ ${#packages[@]} -gt 0 ]; then
