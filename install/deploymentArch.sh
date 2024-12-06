@@ -339,14 +339,15 @@ install_nnn() {
     echo -e "${YELLOW}Installing dependencies and fonts...${NC}"
     sudo pacman -S --needed --noconfirm "${deps[@]}" || handle_error "Failed to install dependencies"
     
-    # Create temporary build directory
-    local BUILD_DIR="/tmp/nnn-build"
+    # Create temporary build directory in user's home
+    local BUILD_DIR="$REAL_HOME/.tmp/nnn-build"
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
-    cd "$BUILD_DIR" || return 1
+    chown -R "$REAL_USER":"$REAL_USER" "$BUILD_DIR"
     
     # Clone and build nnn with nerd fonts support
     echo -e "${YELLOW}Cloning and building nnn with nerd fonts support...${NC}"
+    cd "$BUILD_DIR" || return 1
     sudo -u "$REAL_USER" git clone https://github.com/jarun/nnn.git .
     cd nnn || return 1
     sudo -u "$REAL_USER" make O_NERD=1 || handle_error "Failed to build nnn"

@@ -37,7 +37,7 @@ alias logs.usb='sudo journalctl -b | grep usb | $PAGER'
 alias logs.boot='sudo journalctl -b | $PAGER'
 
 if [[ -x "$(command -v bat)" ]]; then
-	alias bat='bat --paging=never --style=header,grid --theme=Visual Studio Dark+'
+	alias bat='bat --paging=never --style=header,grid'
 	alias cat='bat'
 fi
 

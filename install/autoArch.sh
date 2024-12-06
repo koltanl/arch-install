@@ -246,8 +246,20 @@ reflector --verbose --country 'US' --latest 100 --download-timeout 1 --number 15
 # Configure pacman
 sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 32/' /etc/pacman.conf
 
-# Install bootloader packages
-pacman -S --noconfirm grub efibootmgr os-prober
+# Install base packages
+pacman -S --needed grub efibootmgr os-prober --noconfirm
+
+# Install desktop environment
+pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta --noconfirm
+
+# Install graphics and processor-specific packages
+pacman -S --needed "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" --noconfirm
+
+# Install networking tools
+pacman -S --needed networkmanager dhclient bluez bluez-utils --noconfirm
+
+# Install basic utilities
+pacman -S --needed zsh nano wget --noconfirm
 
 # Configure mkinitcpio with encryption support
 sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect keyboard keymap modconf block encrypt filesystems fsck)/' /etc/mkinitcpio.conf
@@ -266,13 +278,6 @@ fi
 HOME_UUID=$(blkid -s UUID -o value "${DISK}${PART_SUFFIX}4")
 sed -i 's/^GRUB_CMDLINE_LINUX=.*/GRUB_CMDLINE_LINUX="cryptdevice=UUID='${HOME_UUID}':crypthome"/' /etc/default/grub
 grub-mkconfig -o /boot/grub/grub.cfg
-
-
-# Install desktop environment and utilities
-pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta \
-    "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" networkmanager dhclient \
-    bluez bluez-utils grub efibootmgr os-prober zsh nano wget --noconfirm
-
 
 # Enable services
 systemctl enable sddm
