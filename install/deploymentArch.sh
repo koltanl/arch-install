@@ -54,32 +54,21 @@ install_yay() {
         # Install dependencies
         sudo pacman -S --needed git base-devel --noconfirm || handle_error "Failed to install yay dependencies"
         
-        # Create a temporary user for building yay
-        local BUILD_USER="makepkg_user"
+        # Create build directory
         local BUILD_DIR="/tmp/yay-build"
-        
-        # Clean up any previous build attempts
         rm -rf "$BUILD_DIR"
         mkdir -p "$BUILD_DIR"
+        chown -R "$REAL_USER":"$REAL_USER" "$BUILD_DIR"
         
-        # Create build user if it doesn't exist
-        if ! id "$BUILD_USER" &>/dev/null; then
-            useradd -m "$BUILD_USER"
-        fi
-        
-        # Give build user ownership of the build directory
-        chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR"
-        
-        # Clone and build yay as the build user
-        cd "$BUILD_DIR"
-        sudo -u "$BUILD_USER" git clone https://aur.archlinux.org/yay.git "$BUILD_DIR"
-        cd "$BUILD_DIR"
-        sudo -u "$BUILD_USER" makepkg -si --noconfirm
+        # Clone and build yay as the real user
+        cd "$BUILD_DIR" || return 1
+        sudo -u "$REAL_USER" git clone https://aur.archlinux.org/yay.git "$BUILD_DIR"
+        cd "$BUILD_DIR" || return 1
+        sudo -u "$REAL_USER" makepkg -si --noconfirm
         
         # Clean up
         cd /
         rm -rf "$BUILD_DIR"
-        userdel -r "$BUILD_USER" 2>/dev/null || true
         
         if ! command_exists yay; then
             handle_error "Yay installation failed"
@@ -164,7 +153,8 @@ setup_dotfiles() {
         echo "Copying dotfiles from $LAUNCHDIR/dotfiles to $REAL_HOME"
         for file in "$LAUNCHDIR/dotfiles"/.* "$LAUNCHDIR/dotfiles"/*; do
             basename=$(basename "$file")
-            if [[ "$basename" != "." && "$basename" != ".." && -f "$file" ]]; then
+            # Skip . .. and omp.json
+            if [[ "$basename" != "." && "$basename" != ".." && "$basename" != "omp.json" && -f "$file" ]]; then
                 echo "Copying $basename to $REAL_HOME/"
                 cp "$file" "$REAL_HOME/$basename"
                 chown "$REAL_USER":"$REAL_USER" "$REAL_HOME/$basename"
@@ -310,6 +300,7 @@ setup_omp() {
     mkdir -p "$config_dir"
     
     cp "$LAUNCHDIR/dotfiles/omp.json" "$config_dir/"
+    chown "$REAL_USER":"$REAL_USER" "$config_dir/omp.json"
 }
 
 
