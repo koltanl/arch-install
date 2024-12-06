@@ -410,7 +410,7 @@ main() {
 
     # Install core dependencies
     install_yay || handle_error "Yay installation failed"
-    install_packages || handle_error "Package installation failed"
+    # install_packages || handle_error "Package installation failed"
     install_nnn || handle_error "NNN installation failed"
     change_shell_to_zsh || handle_error "Shell change failed"
     install_zplug || handle_error "Zplug installation failed"

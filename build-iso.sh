@@ -18,11 +18,8 @@ cp -r /usr/share/archiso/configs/releng/ ${work_dir}
 # Create directory structure in ISO
 mkdir -p ${work_dir}/airootfs/root/custom
 
-# Copy the entire repository to the ISO
-cp -r "${SCRIPT_DIR}"/* ${work_dir}/airootfs/root/custom/
-# Remove any build artifacts or temporary files
-rm -rf ${work_dir}/airootfs/root/custom/isoout
-rm -rf ${work_dir}/airootfs/root/custom/work
+# Copy the entire repository to the ISO, excluding specific directories
+rsync -a --exclude 'isoout' --exclude 'vm_states' "${SCRIPT_DIR}/" ${work_dir}/airootfs/root/custom/
 
 # After copying files but before building ISO, update permissions
 # Main installation scripts

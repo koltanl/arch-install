@@ -44,19 +44,28 @@ SSH_PASS="$ROOT_PASSWORD"
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  --no-build       Skip ISO build, use existing ISO"
-    echo "  --fresh          Start fresh VM from ISO (default behavior)"
-    echo "  --debug, -d      Enable debug output for build and installation"
-    echo "  --update-deploy  Update and run deployment script on VM"
-    echo "  --save          Save current VM state"
-    echo "  --restore       Restore VM from saved state"
-    echo "  --help          Show this help message"
+    echo "  --no-build, -n       Skip ISO build, use existing ISO"
+    echo "  --fresh, -f          Start fresh VM from ISO (default behavior)"
+    echo "  --debug, -d          Enable debug output for build and installation"
+    echo "  --update-deploy, -u  Update and run deployment script on VM"
+    echo "  --save, -s           Save current VM state"
+    echo "  --restore, -r        Restore VM from saved state"
+    echo "  --help, -h           Show this help message"
     exit 1
 }
 
 # Function for cleanup
 cleanup() {
     echo "Cleaning up any failed states..."
+    
+    # Add cleanup of VM state files first
+    echo "Cleaning up VM state files..."
+    sudo rm -rf "$VM_STATE_DIR"/*
+    
+    # Clean up temp build directories
+    echo "Cleaning up build directories..."
+    sudo rm -rf /tmp/archiso-custom
+    sudo rm -rf /tmp/archiso-tmp
     
     # List of possible VM states to check and clean
     local VM_STATES=("running" "paused" "shut off")
@@ -118,13 +127,15 @@ save_vm_state() {
     # Ensure VM is shut down
     sudo virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
     
-    # Create state directory
-    mkdir -p "$state_dir"
+    # Create state directory with proper permissions
+    sudo mkdir -p "$state_dir"
+    sudo chown "$USER:$USER" "$state_dir"
     
-    # Copy disk image
+    # Copy disk image with sudo
     if [ -f "$VM_DISK_PATH" ]; then
         echo "Copying disk image..."
-        cp "$VM_DISK_PATH" "$state_dir/disk.qcow2"
+        sudo cp "$VM_DISK_PATH" "$state_dir/disk.qcow2"
+        sudo chown "$USER:$USER" "$state_dir/disk.qcow2"
     else
         echo "Error: VM disk image not found"
         return 1
@@ -421,7 +432,6 @@ virt-install \
     --machine q35 \
     --check path_in_use=off \
     --noautoconsole || handle_error "Failed to create VM"
-
 echo "
 -------------------------------------------------------------------------------
 VM '$VM_NAME' has been created and is booting from the test ISO.
@@ -450,4 +460,27 @@ To destroy the test VM when done:
     virsh --connect qemu:///system destroy $VM_NAME
     virsh --connect qemu:///system undefine $VM_NAME --remove-all-storage
 -------------------------------------------------------------------------------" 
+
+wait_for_vm_creation() {
+    local retries=30
+    local wait_time=5
+    
+    echo "Waiting for VM to be created..."
+    for ((i=1; i<=retries; i++)); do
+        if virsh --connect qemu:///system list | grep -q "$VM_NAME"; then
+            echo "VM creation confirmed!"
+            return 0
+        fi
+        echo "Attempt $i/$retries - VM not ready, waiting ${wait_time}s..."
+        sleep $wait_time
+    done
+    
+    echo "Failed to confirm VM creation after $retries attempts"
+    return 1
+}
+
+# Add this after the virt-install command:
+if ! wait_for_vm_creation; then
+    handle_error "Failed to confirm VM creation"
+fi
 
