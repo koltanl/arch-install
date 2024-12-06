@@ -356,37 +356,75 @@ setup_kde() {
     mkdir -p "$kde_config_dir"
     mkdir -p "$kde_config_dir/kdedefaults"
     mkdir -p "$kde_config_dir/plasma"
+    sudo_run chown -R "$REAL_USER:$REAL_USER" "$kde_config_dir"
     
-    # Backup existing configs
-    if [ -d "$kde_config_dir" ]; then
-        echo "Backing up existing KDE configs..."
-        for file in kwinrc kwinrulesrc kglobalshortcutsrc plasmarc plasmashellrc kdeglobals; do
-            [ -f "$kde_config_dir/$file" ] && cp "$kde_config_dir/$file" "$kde_config_dir/$file.backup"
-        done
-    fi
+    # Look for KDE configs in multiple locations
+    local kde_locations=(
+        "/root/arch-install/kde"
+        "./kde"
+        "$LAUNCHDIR/kde"
+        "$(dirname "$0")/../kde"
+    )
     
-    # Copy KWin configurations
-    if [ -d "$LAUNCHDIR/kde/kwin" ]; then
-        cp "$LAUNCHDIR/kde/kwin/"* "$kde_config_dir/" 2>/dev/null || true
-    fi
+    local kde_dir=""
+    for loc in "${kde_locations[@]}"; do
+        if sudo test -d "$loc"; then
+            echo "Found KDE configs in $loc"
+            kde_dir="$loc"
+            break
+        fi
+    done
     
-    # Copy shortcuts
-    if [ -d "$LAUNCHDIR/kde/shortcuts" ]; then
-        cp "$LAUNCHDIR/kde/shortcuts/"* "$kde_config_dir/" 2>/dev/null || true
-    fi
-    
-    # Copy Plasma configurations
-    if [ -d "$LAUNCHDIR/kde/plasma" ]; then
-        cp -r "$LAUNCHDIR/kde/plasma/"* "$kde_config_dir/" 2>/dev/null || true
-    fi
-    
-    # Copy theme configurations
-    if [ -f "$LAUNCHDIR/kde/kdeglobals" ]; then
-        cp "$LAUNCHDIR/kde/kdeglobals" "$kde_config_dir/"
-    fi
-    
-    if [ -d "$LAUNCHDIR/kde/kdedefaults" ]; then
-        cp -r "$LAUNCHDIR/kde/kdedefaults" "$kde_config_dir/"
+    if [ -n "$kde_dir" ]; then
+        echo "Setting up KDE configurations from $kde_dir"
+        
+        # Backup existing configs
+        if [ -d "$kde_config_dir" ]; then
+            echo "Backing up existing KDE configs..."
+            for file in kwinrc kwinrulesrc kglobalshortcutsrc plasmarc plasmashellrc kdeglobals; do
+                [ -f "$kde_config_dir/$file" ] && sudo cp "$kde_config_dir/$file" "$kde_config_dir/$file.backup"
+            done
+        fi
+        
+        # Copy KWin configurations
+        if sudo test -d "$kde_dir/kwin"; then
+            echo "Copying KWin configurations..."
+            sudo cp "$kde_dir/kwin/"* "$kde_config_dir/" 2>/dev/null || true
+        fi
+        
+        # Copy shortcuts
+        if sudo test -d "$kde_dir/shortcuts"; then
+            echo "Copying shortcuts..."
+            sudo cp "$kde_dir/shortcuts/"* "$kde_config_dir/" 2>/dev/null || true
+        fi
+        
+        # Copy Plasma configurations
+        if sudo test -d "$kde_dir/plasma"; then
+            echo "Copying Plasma configurations..."
+            sudo cp -r "$kde_dir/plasma/"* "$kde_config_dir/" 2>/dev/null || true
+        fi
+        
+        # Copy theme configurations
+        if sudo test -f "$kde_dir/kdeglobals"; then
+            echo "Copying kdeglobals..."
+            sudo cp "$kde_dir/kdeglobals" "$kde_config_dir/"
+        fi
+        
+        if sudo test -d "$kde_dir/kdedefaults"; then
+            echo "Copying KDE defaults..."
+            sudo cp -r "$kde_dir/kdedefaults/"* "$kde_config_dir/kdedefaults/" 2>/dev/null || true
+        fi
+        
+        # Fix ownership
+        sudo_run chown -R "$REAL_USER:$REAL_USER" "$kde_config_dir"
+        
+        # List what we copied
+        echo "KDE configurations installed:"
+        ls -la "$kde_config_dir"
+        echo "KDE defaults installed:"
+        ls -la "$kde_config_dir/kdedefaults"
+    else
+        handle_error "KDE configuration directory not found in known locations"
     fi
 }
 
@@ -419,19 +457,32 @@ setup_scripts() {
     done
     
     if [ -n "$scripts_dir" ]; then
+        echo "Setting up scripts from $scripts_dir"
+        
         # Create utils subdirectory if it exists in source
         if sudo test -d "$scripts_dir/utils"; then
+            echo "Found utils directory, copying utils scripts..."
             mkdir -p "$bin_dir/utils"
-            sudo cp "$scripts_dir/utils/"*.{sh,py} "$bin_dir/utils/" 2>/dev/null || true
+            # Copy utils scripts separately to avoid brace expansion issues
+            sudo find "$scripts_dir/utils" -type f -name "*.sh" -exec cp {} "$bin_dir/utils/" \;
+            sudo find "$scripts_dir/utils" -type f -name "*.py" -exec cp {} "$bin_dir/utils/" \;
         fi
         
-        # Copy scripts with error suppression
-        sudo cp "$scripts_dir/"*.sh "$bin_dir/" 2>/dev/null || true
-        sudo cp "$scripts_dir/"*.py "$bin_dir/" 2>/dev/null || true
+        # Copy root scripts separately
+        echo "Copying root level scripts..."
+        sudo find "$scripts_dir" -maxdepth 1 -type f -name "*.sh" -exec cp {} "$bin_dir/" \;
+        sudo find "$scripts_dir" -maxdepth 1 -type f -name "*.py" -exec cp {} "$bin_dir/" \;
         
         # Make everything executable and fix ownership
-        sudo find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
+        echo "Setting permissions..."
+        sudo find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} \;
         sudo_run chown -R "$REAL_USER:$REAL_USER" "$bin_dir"
+        
+        # List what we copied
+        echo "Scripts installed:"
+        ls -la "$bin_dir"
+        echo "Utils installed:"
+        ls -la "$bin_dir/utils"
     else
         handle_error "Scripts directory not found in known locations"
     fi
