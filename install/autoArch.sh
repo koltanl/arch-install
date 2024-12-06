@@ -292,7 +292,7 @@ echo "Setting up deployment script to run on first login..."
 cat >> /home/${USERNAME}/.bashrc <<'EOF'
 
 # Check for first-time deployment
-if [ ! -f "$HOME/.deployment_done" ]; then
+if [[ ! -f "$HOME/.deployment_done" ]]; then
     echo "Running first-time system deployment..."
     sudo /root/arch-install/install/deploymentArch.sh
     touch "$HOME/.deployment_done"

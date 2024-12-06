@@ -604,14 +604,16 @@ sudo -u "${USERNAME}" bash -c "
 "
 
 # Install desktop environment and utilities
-pacman -S --needed sddm plasma-desktop plasma-wayland-session plasma-pa plasma-nm \
+pacman -S --needed sddm plasma kde-system-meta kde-utilities-meta \
     "${GRAPHICS_DRIVER}" "${PROCESSOR_UCODE}" networkmanager dhclient \
-    grub efibootmgr os-prober zsh nano wget --noconfirm
+    bluez bluez-utils grub efibootmgr os-prober zsh nano wget --noconfirm
+
 
 # Enable services
 systemctl enable sddm
 systemctl enable NetworkManager
 systemctl enable bluetooth
+
 
 # Add user to libvirt group
 usermod -aG libvirt "${USERNAME}"
@@ -622,7 +624,7 @@ echo "Setting up deployment script to run on first login..."
 cat >> /home/${USERNAME}/.bashrc <<'EOF'
 
 # Check for first-time deployment
-if [ ! -f "$HOME/.deployment_done" ]; then
+if [[ ! -f "$HOME/.deployment_done" ]]; then
     echo "Running first-time system deployment..."
     sudo /root/arch-install/install/deploymentArch.sh
     touch "$HOME/.deployment_done"

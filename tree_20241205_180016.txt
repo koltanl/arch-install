@@ -1,0 +1,445 @@
+Directory Tree for: /home/anon/git/arch-install
+Generated on: 2024-12-05 18:00:16
+==================================================
+
+arch-install
+├── LICENSE
+├── README.md
+├── build-iso.sh
+├── debugplan.txt
+├── docs
+│   ├── clipboard sharing
+├── dotfiles
+│   ├── omp.json
+├── install
+│   ├── README.md
+│   ├── autoArch.sh
+│   ├── deploymentArch.sh
+│   ├── interactiveArch.sh
+│   ├── pkglist.txt
+│   ├── preseed.conf
+│   ├── preseed.conf.template
+│   ├── preseedArch.sh
+│   ├── test_deployment.sh
+├── isoout
+│   ├── archlinux-2024.12.05-x86_64.iso
+├── kde
+│   ├── kdedefaults
+│   │   ├── kcminputrc
+│   │   ├── kdeglobals
+│   │   ├── kscreenlockerrc
+│   │   ├── ksplashrc
+│   │   ├── kwinrc
+│   │   ├── package
+│   │   ├── plasmarc
+│   ├── kdeglobals
+│   ├── kwin
+│   │   ├── kwinrc
+│   │   ├── kwinrulesrc
+│   ├── plasma
+│   │   ├── plasma-org.kde.plasma.desktop-appletsrc
+│   │   ├── plasmarc
+│   │   ├── plasmashellrc
+│   ├── shortcuts
+│   │   ├── kglobalshortcutsrc
+├── kitty
+│   ├── 0terminal.png
+│   ├── 1terminal.png
+│   ├── kitty-themes
+│   │   ├── LICENSE
+│   │   ├── README.rst
+│   │   ├── gen-metadata.py
+│   │   ├── minimal-kiwi-theme.conf
+│   │   ├── screenshot.png
+│   │   ├── template.conf
+│   │   ├── themes
+│   │   │   ├── 1984_dark.conf
+│   │   │   ├── 1984_light.conf
+│   │   │   ├── 1984_orwellian.conf
+│   │   │   ├── 3024_Day.conf
+│   │   │   ├── 3024_Night.conf
+│   │   │   ├── ANSI-87.conf
+│   │   │   ├── Adapta_Nokto_Maia.conf
+│   │   │   ├── AdventureTime.conf
+│   │   │   ├── Afterglow.conf
+│   │   │   ├── Alabaster.conf
+│   │   │   ├── Alabaster_Dark.conf
+│   │   │   ├── AlienBlood.conf
+│   │   │   ├── Alucard.conf
+│   │   │   ├── Apprentice.conf
+│   │   │   ├── Aquarium_Dark.conf
+│   │   │   ├── Aquarium_Light.conf
+│   │   │   ├── Argonaut.conf
+│   │   │   ├── Arthur.conf
+│   │   │   ├── Atom.conf
+│   │   │   ├── AtomOneLight.conf
+│   │   │   ├── Batman.conf
+│   │   │   ├── Belafonte_Day.conf
+│   │   │   ├── Belafonte_Night.conf
+│   │   │   ├── BirdsOfParadise.conf
+│   │   │   ├── BlackMetal.conf
+│   │   │   ├── Blazer.conf
+│   │   │   ├── BlulocoDark.conf
+│   │   │   ├── BlulocoLight.conf
+│   │   │   ├── Borland.conf
+│   │   │   ├── Box.conf
+│   │   │   ├── Bright_Lights.conf
+│   │   │   ├── Broadcast.conf
+│   │   │   ├── Brogrammer.conf
+│   │   │   ├── C64.conf
+│   │   │   ├── CLRS.conf
+│   │   │   ├── Campbell.conf
+│   │   │   ├── Carbonfox.conf
+│   │   │   ├── Catppuccin-Frappe.conf
+│   │   │   ├── Catppuccin-Latte.conf
+│   │   │   ├── Catppuccin-Macchiato.conf
+│   │   │   ├── Catppuccin-Mocha.conf
+│   │   │   ├── Chalk.conf
+│   │   │   ├── Chalkboard.conf
+│   │   │   ├── ChallengerDeep.conf
+│   │   │   ├── Ciapre.conf
+│   │   │   ├── Cobalt2.conf
+│   │   │   ├── Cobalt_Neon.conf
+│   │   │   ├── Constant_Perceptual_Luminosity_dark.conf
+│   │   │   ├── Corvine.conf
+│   │   │   ├── CrayonPonyFish.conf
+│   │   │   ├── Cyberpunk-Neon.conf
+│   │   │   ├── DarkOneNuanced.conf
+│   │   │   ├── Dark_Pastel.conf
+│   │   │   ├── Darkside.conf
+│   │   │   ├── Dawnfox.conf
+│   │   │   ├── Dayfox.conf
+│   │   │   ├── Desert.conf
+│   │   │   ├── DesertNight.conf
+│   │   │   ├── DimmedMonokai.conf
+│   │   │   ├── Doom_One.conf
+│   │   │   ├── Doom_One_Light.conf
+│   │   │   ├── Doom_Vibrant.conf
+│   │   │   ├── DotGov.conf
+│   │   │   ├── Dracula.conf
+│   │   │   ├── Dumbledore.conf
+│   │   │   ├── Duotone_Dark.conf
+│   │   │   ├── Duskfox.conf
+│   │   │   ├── ENCOM.conf
+│   │   │   ├── Earthsong.conf
+│   │   │   ├── Eldritch.conf
+│   │   │   ├── Elemental.conf
+│   │   │   ├── Espresso.conf
+│   │   │   ├── Espresso_Libre.conf
+│   │   │   ├── Falcon.conf
+│   │   │   ├── Farin.conf
+│   │   │   ├── Fideloper.conf
+│   │   │   ├── FishTank.conf
+│   │   │   ├── Flat.conf
+│   │   │   ├── Flatland.conf
+│   │   │   ├── Floraverse.conf
+│   │   │   ├── ForestNight.conf
+│   │   │   ├── FrontEndDelight.conf
+│   │   │   ├── FunForrest.conf
+│   │   │   ├── Galaxy.conf
+│   │   │   ├── GitHub_Dark.conf
+│   │   │   ├── GitHub_Dark_Colorblind.conf
+│   │   │   ├── GitHub_Dark_Dimmed.conf
+│   │   │   ├── GitHub_Dark_High_Contrast.conf
+│   │   │   ├── GitHub_Light.conf
+│   │   │   ├── GitHub_Light_Colorblind.conf
+│   │   │   ├── GitHub_Light_High_Contrast.conf
+│   │   │   ├── Github.conf
+│   │   │   ├── Glacier.conf
+│   │   │   ├── Gnome-ish_gray-on-black.conf
+│   │   │   ├── GoaBase.conf
+│   │   │   ├── Grape.conf
+│   │   │   ├── Grass.conf
+│   │   │   ├── GruvboxMaterialDarkHard.conf
+│   │   │   ├── GruvboxMaterialDarkMedium.conf
+│   │   │   ├── GruvboxMaterialDarkSoft.conf
+│   │   │   ├── GruvboxMaterialLightHard.conf
+│   │   │   ├── GruvboxMaterialLightMedium.conf
+│   │   │   ├── GruvboxMaterialLightSoft.conf
+│   │   │   ├── HachikoRed.conf
+│   │   │   ├── Hardcore.conf
+│   │   │   ├── Harper.conf
+│   │   │   ├── Highway.conf
+│   │   │   ├── Hipster_Green.conf
+│   │   │   ├── Homebrew.conf
+│   │   │   ├── Hurtado.conf
+│   │   │   ├── Hybrid.conf
+│   │   │   ├── IC_Green_PPL.conf
+│   │   │   ├── IC_Orange_PPL.conf
+│   │   │   ├── IR_Black.conf
+│   │   │   ├── Jackie_Brown.conf
+│   │   │   ├── Japanesque.conf
+│   │   │   ├── Jellybeans.conf
+│   │   │   ├── JetBrains_Darcula.conf
+│   │   │   ├── Kaolin_Aurora.conf
+│   │   │   ├── Kaolin_Breeze.conf
+│   │   │   ├── Kaolin_Dark.conf
+│   │   │   ├── Kaolin_Galaxy.conf
+│   │   │   ├── Kaolin_Light.conf
+│   │   │   ├── Kaolin_Ocean.conf
+│   │   │   ├── Kaolin_Temple.conf
+│   │   │   ├── Kibble.conf
+│   │   │   ├── Later_This_Evening.conf
+│   │   │   ├── Lavandula.conf
+│   │   │   ├── LiquidCarbon.conf
+│   │   │   ├── LiquidCarbonTransparent.conf
+│   │   │   ├── LiquidCarbonTransparentInverse.conf
+│   │   │   ├── Man_Page.conf
+│   │   │   ├── Material.conf
+│   │   │   ├── MaterialDark.conf
+│   │   │   ├── Mathias.conf
+│   │   │   ├── Medallion.conf
+│   │   │   ├── Misterioso.conf
+│   │   │   ├── Modus_Operandi.conf
+│   │   │   ├── Modus_Operandi_Tinted.conf
+│   │   │   ├── Modus_Vivendi.conf
+│   │   │   ├── Modus_Vivendi_Tinted.conf
+│   │   │   ├── Molokai.conf
+│   │   │   ├── MonaLisa.conf
+│   │   │   ├── Monoindustrial.conf
+│   │   │   ├── Monokai.conf
+│   │   │   ├── Monokai_Classic.conf
+│   │   │   ├── Monokai_Pro.conf
+│   │   │   ├── Monokai_Pro_(Filter_Machine).conf
+│   │   │   ├── Monokai_Pro_(Filter_Octagon).conf
+│   │   │   ├── Monokai_Pro_(Filter_Ristretto).conf
+│   │   │   ├── Monokai_Pro_(Filter_Spectrum).conf
+│   │   │   ├── Monokai_Soda.conf
+│   │   │   ├── N0tch2k.conf
+│   │   │   ├── Neopolitan.conf
+│   │   │   ├── Neowave.conf
+│   │   │   ├── Neutron.conf
+│   │   │   ├── NightLion_v1.conf
+│   │   │   ├── NightLion_v2.conf
+│   │   │   ├── Nightfox.conf
+│   │   │   ├── Nord.conf
+│   │   │   ├── Nordfox.conf
+│   │   │   ├── Nova.conf
+│   │   │   ├── Novel.conf
+│   │   │   ├── Obsidian.conf
+│   │   │   ├── Ocean.conf
+│   │   │   ├── OceanicMaterial.conf
+│   │   │   ├── Ollie.conf
+│   │   │   ├── OneDark-Pro.conf
+│   │   │   ├── OneDark.conf
+│   │   │   ├── OneHalfDark.conf
+│   │   │   ├── OneHalfLight.conf
+│   │   │   ├── PaperColor_dark.conf
+│   │   │   ├── PaperColor_light.conf
+│   │   │   ├── Parasio_Dark.conf
+│   │   │   ├── PaulMillr.conf
+│   │   │   ├── PencilDark.conf
+│   │   │   ├── PencilLight.conf
+│   │   │   ├── Piatto_Light.conf
+│   │   │   ├── Pnevma.conf
+│   │   │   ├── Pro.conf
+│   │   │   ├── Red_Alert.conf
+│   │   │   ├── Red_Sands.conf
+│   │   │   ├── Relaxed_Afterglow.conf
+│   │   │   ├── Renault_Style.conf
+│   │   │   ├── Renault_Style_Light.conf
+│   │   │   ├── Rippedcasts.conf
+│   │   │   ├── Royal.conf
+│   │   │   ├── Sakura_Night.conf
+│   │   │   ├── SeaShells.conf
+│   │   │   ├── Seafoam_Pastel.conf
+│   │   │   ├── Seti.conf
+│   │   │   ├── Shaman.conf
+│   │   │   ├── Sierra.conf
+│   │   │   ├── Slate.conf
+│   │   │   ├── Smyck.conf
+│   │   │   ├── SnowDark.conf
+│   │   │   ├── SnowLight.conf
+│   │   │   ├── SoftServer.conf
+│   │   │   ├── Solarized8_Dark.conf
+│   │   │   ├── Solarized_Darcula.conf
+│   │   │   ├── Solarized_Dark.conf
+│   │   │   ├── Solarized_Dark_-_Patched.conf
+│   │   │   ├── Solarized_Dark_Higher_Contrast.conf
+│   │   │   ├── Solarized_Light.conf
+│   │   │   ├── Source_Code_X.conf
+│   │   │   ├── Sourcerer.conf
+│   │   │   ├── SpaceGray.conf
+│   │   │   ├── SpaceGray_Eighties.conf
+│   │   │   ├── SpaceGray_Eighties_Dull.conf
+│   │   │   ├── Spacedust.conf
+│   │   │   ├── Spacemacs.conf
+│   │   │   ├── Spiderman.conf
+│   │   │   ├── Spring.conf
+│   │   │   ├── Square.conf
+│   │   │   ├── Srcery.conf
+│   │   │   ├── Substrata.conf
+│   │   │   ├── Sundried.conf
+│   │   │   ├── Symfonic.conf
+│   │   │   ├── Tango_Dark.conf
+│   │   │   ├── Tango_Light.conf
+│   │   │   ├── Teerb.conf
+│   │   │   ├── Terafox.conf
+│   │   │   ├── Thayer_Bright.conf
+│   │   │   ├── The_Hulk.conf
+│   │   │   ├── Tomorrow.conf
+│   │   │   ├── Tomorrow_Night.conf
+│   │   │   ├── Tomorrow_Night_Blue.conf
+│   │   │   ├── Tomorrow_Night_Bright.conf
+│   │   │   ├── Tomorrow_Night_Eighties.conf
+│   │   │   ├── ToyChest.conf
+│   │   │   ├── Treehouse.conf
+│   │   │   ├── Twilight.conf
+│   │   │   ├── Ubuntu.conf
+│   │   │   ├── Urple.conf
+│   │   │   ├── VSCode_Dark.conf
+│   │   │   ├── Vaughn.conf
+│   │   │   ├── VibrantInk.conf
+│   │   │   ├── WarmNeon.conf
+│   │   │   ├── Wez.conf
+│   │   │   ├── WildCherry.conf
+│   │   │   ├── Wombat.conf
+│   │   │   ├── Wryan.conf
+│   │   │   ├── YsDark.conf
+│   │   │   ├── Zenburn.conf
+│   │   │   ├── adwaita_dark.conf
+│   │   │   ├── adwaita_darker.conf
+│   │   │   ├── adwaita_light.conf
+│   │   │   ├── atelier-cave-dark.conf
+│   │   │   ├── atelier-dune-dark.conf
+│   │   │   ├── atelier-estuary-dark.conf
+│   │   │   ├── atelier-forest-dark.conf
+│   │   │   ├── atelier-heath-dark.conf
+│   │   │   ├── atelier-lakeside-dark.conf
+│   │   │   ├── atelier-plateau-dark.conf
+│   │   │   ├── atelier-savanna-dark.conf
+│   │   │   ├── atelier-seaside-dark.conf
+│   │   │   ├── atelier-sulphurpool-dark.conf
+│   │   │   ├── ayu.conf
+│   │   │   ├── ayu_light.conf
+│   │   │   ├── ayu_mirage.conf
+│   │   │   ├── base2tone-cave-dark.conf
+│   │   │   ├── base2tone-desert-dark.conf
+│   │   │   ├── base2tone-drawbridge-dark.conf
+│   │   │   ├── base2tone-earth-dark.conf
+│   │   │   ├── base2tone-evening-dark.conf
+│   │   │   ├── base2tone-field-dark.conf
+│   │   │   ├── base2tone-forest-dark.conf
+│   │   │   ├── base2tone-garden-dark.conf
+│   │   │   ├── base2tone-heath-dark.conf
+│   │   │   ├── base2tone-lake-dark.conf
+│   │   │   ├── base2tone-lavender-dark.conf
+│   │   │   ├── base2tone-mall-dark.conf
+│   │   │   ├── base2tone-meadow-dark.conf
+│   │   │   ├── base2tone-morning-dark.conf
+│   │   │   ├── base2tone-motel-dark.conf
+│   │   │   ├── base2tone-pool-dark.conf
+│   │   │   ├── base2tone-porch-dark.conf
+│   │   │   ├── base2tone-sea-dark.conf
+│   │   │   ├── base2tone-space-dark.conf
+│   │   │   ├── base2tone-suburb-dark.conf
+│   │   │   ├── base4tone-classic-d-dark.conf
+│   │   │   ├── base4tone-classic-i-dark.conf
+│   │   │   ├── base4tone-classic-p-dark.conf
+│   │   │   ├── base4tone-classic-s-dark.conf
+│   │   │   ├── base4tone-classic-w-dark.conf
+│   │   │   ├── base4tone-modern-n-dark.conf
+│   │   │   ├── base4tone-modern-w-dark.conf
+│   │   │   ├── bl1nk.conf
+│   │   │   ├── breath2.conf
+│   │   │   ├── cherry-midnight.conf
+│   │   │   ├── cherry.conf
+│   │   │   ├── citylights.conf
+│   │   │   ├── cyberpunk.conf
+│   │   │   ├── dark_pride.conf
+│   │   │   ├── default.conf
+│   │   │   ├── duckbones.conf
+│   │   │   ├── everforest_dark_hard.conf
+│   │   │   ├── everforest_dark_medium.conf
+│   │   │   ├── everforest_dark_soft.conf
+│   │   │   ├── everforest_light_hard.conf
+│   │   │   ├── everforest_light_medium.conf
+│   │   │   ├── everforest_light_soft.conf
+│   │   │   ├── fairyfloss.conf
+│   │   │   ├── flexoki_dark.conf
+│   │   │   ├── flexoki_light.conf
+│   │   │   ├── gruvbox-dark-hard.conf
+│   │   │   ├── gruvbox-dark-soft.conf
+│   │   │   ├── gruvbox-dark.conf
+│   │   │   ├── gruvbox-light-hard.conf
+│   │   │   ├── gruvbox-light-soft.conf
+│   │   │   ├── gruvbox-light.conf
+│   │   │   ├── h_pux.conf
+│   │   │   ├── idleToes.conf
+│   │   │   ├── kanagawa.conf
+│   │   │   ├── kanagawa_dragon.conf
+│   │   │   ├── kanagawa_light.conf
+│   │   │   ├── kanagawabones.conf
+│   │   │   ├── kurayami.conf
+│   │   │   ├── leaf_dark.conf
+│   │   │   ├── leaf_light.conf
+│   │   │   ├── mayukai.conf
+│   │   │   ├── midsummer-night.conf
+│   │   │   ├── mishran.conf
+│   │   │   ├── moonlight.conf
+│   │   │   ├── neobones_dark.conf
+│   │   │   ├── neobones_light.conf
+│   │   │   ├── night_owl.conf
+│   │   │   ├── nightfly.conf
+│   │   │   ├── noirblaze.conf
+│   │   │   ├── noirbuddy-oxide.conf
+│   │   │   ├── outrun_electric.conf
+│   │   │   ├── phanes.conf
+│   │   │   ├── pink_lavender.conf
+│   │   │   ├── purpurite.conf
+│   │   │   ├── rose-pine-dawn.conf
+│   │   │   ├── rose-pine-moon.conf
+│   │   │   ├── rose-pine.conf
+│   │   │   ├── selenized-black.conf
+│   │   │   ├── selenized-dark.conf
+│   │   │   ├── selenized-light.conf
+│   │   │   ├── selenized-white.conf
+│   │   │   ├── seoulbones_dark.conf
+│   │   │   ├── seoulbones_light.conf
+│   │   │   ├── shadotheme.conf
+│   │   │   ├── snazzy.conf
+│   │   │   ├── spaceduck.conf
+│   │   │   ├── tender.conf
+│   │   │   ├── tokyo_night_day.conf
+│   │   │   ├── tokyo_night_moon.conf
+│   │   │   ├── tokyo_night_night.conf
+│   │   │   ├── tokyo_night_storm.conf
+│   │   │   ├── vague.conf
+│   │   │   ├── vimbones.conf
+│   │   │   ├── wizzy-bright.conf
+│   │   │   ├── wizzy-muted.conf
+│   │   │   ├── xcodedark.conf
+│   │   │   ├── zenbones_dark.conf
+│   │   │   ├── zenbones_light.conf
+│   │   │   ├── zenburned.conf
+│   │   │   ├── zenwritten_dark.conf
+│   │   │   ├── zenwritten_light.conf
+│   │   └── themes.json
+│   ├── kitty.conf
+│   ├── terminal.png
+│   ├── theme.conf
+├── scripts
+│   ├── backup-kde-config.sh
+│   ├── browserNetworkDevices.sh
+│   ├── isopacker.sh
+│   ├── nnn_opener.sh
+│   ├── refreshiso.sh
+│   ├── remove-virtualization.sh
+│   ├── setup-virtualization.sh
+│   ├── test-virtualization.sh
+│   ├── treegen.py
+│   ├── triangle.sh
+│   ├── utils
+│   │   ├── procure.py
+│   │   ├── sleep.sh
+│   │   ├── uninstall.py
+│   ├── wifiscanner.sh
+├── test-installer.sh
+├── torun
+│   ├── arch-linux-grub-theme.tar
+│   ├── grubthemer.sh
+│   ├── pacmaneyecandy.sh
+└── tree_20241205_180016.txt
+
+==================================================
+Generated by treegen.py

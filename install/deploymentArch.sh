@@ -9,9 +9,11 @@ NC='\033[0m' # No Color
 # Test mode flag
 TEST_MODE=${TEST_MODE:-false}
 
-# Error handling
-set -e
-trap 'echo -e "${RED}An error occurred during execution. Installation failed.${NC}" >&2' ERR
+# Function to handle errors but continue execution
+handle_error() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    return 0  # Continue execution
+}
 
 echo -e "${GREEN}Starting system setup...${NC}"
 
@@ -225,13 +227,15 @@ setup_scripts() {
     # Create utils subdirectory if it exists in source
     if [ -d "scripts/utils" ]; then
         mkdir -p "$bin_dir/utils"
+        cp scripts/utils/*.sh "$bin_dir/utils/" 2>/dev/null || true
     fi
     
-    cp scripts/*.sh "$bin_dir/"
-    cp scripts/*.py "$bin_dir/"
+    # Copy scripts with error suppression
+    cp scripts/*.sh "$bin_dir/" 2>/dev/null || true
+    cp scripts/*.py "$bin_dir/" 2>/dev/null || true
     
-    chmod +x "$bin_dir"/*.sh
-    chmod +x "$bin_dir"/*.py
+    # Make everything executable
+    find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} +
 }
 
 # Function to setup oh-my-posh theme
@@ -273,38 +277,21 @@ main() {
         echo -e "${YELLOW}TEST MODE: Would update system packages${NC}"
     else
         echo -e "${YELLOW}Updating system...${NC}"
-        sudo pacman -Syu --noconfirm
+        sudo pacman -Syu --noconfirm || handle_error "System update failed"
     fi
 
     # Install core dependencies
-    install_yay
-    setup_pacman
-    install_packages
-    install_zplug
-    install_oh_my_posh
-    install_atuin
-    setup_dotfiles
-    setup_kitty
-    setup_kde
-    setup_scripts
-    setup_omp
-
-    # Set zsh as default shell if it isn't already
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would set zsh as default shell${NC}"
-    elif [ "$SHELL" != "/usr/bin/zsh" ]; then
-        echo -e "${YELLOW}Setting zsh as default shell...${NC}"
-        sudo chsh -s /usr/bin/zsh "$USER"
-    fi
-
-    # Reload KDE configurations if running
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would reload KDE configurations if running${NC}"
-    elif pgrep -x "plasmashell" > /dev/null; then
-        echo -e "${YELLOW}Reloading KDE configurations...${NC}"
-        qdbus org.kde.KWin /KWin reconfigure
-        qdbus org.kde.plasmashell /PlasmaShell evaluateScript "refreshAllDesktops()"
-    fi
+    install_yay || handle_error "Yay installation failed"
+    setup_pacman || handle_error "Pacman setup failed"
+    install_packages || handle_error "Package installation failed"
+    install_zplug || handle_error "Zplug installation failed"
+    install_oh_my_posh || handle_error "Oh-my-posh installation failed"
+    install_atuin || handle_error "Atuin installation failed"
+    setup_dotfiles || handle_error "Dotfiles setup failed"
+    setup_kitty || handle_error "Kitty setup failed"
+    setup_kde || handle_error "KDE setup failed"
+    setup_scripts || handle_error "Scripts setup failed"
+    setup_omp || handle_error "Oh-my-posh setup failed"
 
     echo -e "${GREEN}Installation complete! Please log out and log back in for all changes to take effect.${NC}"
 }
