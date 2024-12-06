@@ -291,18 +291,8 @@ systemctl enable bluetooth
 echo "Setting up deployment script to run on first login..."
 cat >> /home/${USERNAME}/.bashrc <<'EOF'
 
-# Check for first-time deployment
-if [[ ! -f "$HOME/.deployment_done" ]]; then
-    echo "Running first-time system deployment..."
+if [ -f /root/arch-install/install/deploymentArch.sh ]; then
     sudo /root/arch-install/install/deploymentArch.sh
-    touch "$HOME/.deployment_done"
-    # Prompt for reboot after deployment
-    echo "Deployment complete. Please reboot your system."
-    read -p "Would you like to reboot now? [Y/n] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-        sudo reboot
-    fi
 fi
 EOF
 

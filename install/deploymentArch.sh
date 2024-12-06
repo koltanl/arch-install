@@ -293,7 +293,23 @@ main() {
     setup_scripts || handle_error "Scripts setup failed"
     setup_omp || handle_error "Oh-my-posh setup failed"
 
+    # Run all scripts in torun directory
+    echo -e "${YELLOW}Running additional configuration scripts...${NC}"
+    if [ -d "/root/arch-install/torun" ]; then
+        for script in /root/arch-install/torun/*.sh; do
+            if [ -f "$script" ]; then
+                echo -e "${YELLOW}Running $(basename "$script")...${NC}"
+                sudo bash "$script" || handle_error "Failed to run $(basename "$script")"
+            fi
+        done
+    fi
+
     echo -e "${GREEN}Installation complete! Please log out and log back in for all changes to take effect.${NC}"
+
+    # Clean up installation files; ALWAYS KEEP THIS AT END OF SCRIPT
+    echo -e "${YELLOW}Cleaning up installation files...${NC}"
+    cd /
+    rm -rf /root/arch-install
 }
 
 # Run the script
