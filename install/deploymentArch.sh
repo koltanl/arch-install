@@ -173,6 +173,22 @@ install_zplug() {
 install_packages() {
     echo -e "${YELLOW}Installing packages from pkglist.json...${NC}"
     
+    # First, ensure jq is installed
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "Installing jq for JSON parsing..."
+        if [ -n "$SUDO_PASS" ]; then
+            printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm jq || {
+                echo -e "${RED}Error: Failed to install jq. Cannot proceed with package installation.${NC}"
+                return 1
+            }
+        else
+            sudo pacman -S --needed --noconfirm jq || {
+                echo -e "${RED}Error: Failed to install jq. Cannot proceed with package installation.${NC}"
+                return 1
+            }
+        fi
+    fi
+    
     local pkglist_path="/root/arch-install/install/pkglist.json"
     
     if ! sudo test -f "$pkglist_path"; then
@@ -194,13 +210,26 @@ install_packages() {
     local json_content
     json_content=$(sudo cat "$pkglist_path")
     
+    # Validate JSON content
+    if ! echo "$json_content" | jq empty 2>/dev/null; then
+        echo -e "${RED}Error: Invalid JSON in pkglist.json${NC}"
+        return 1
+    fi
+    
+    echo "DEBUG: Successfully parsed JSON file"
+    
     # First pass: Install interactive packages
     echo -e "${YELLOW}Installing packages that require interaction...${NC}"
-    local interactive_packages
-    interactive_packages=$(echo "$json_content" | jq -r '.interactive_packages[]' 2>/dev/null)
-    
-    if [ -n "$interactive_packages" ]; then
+    if ! interactive_packages=$(echo "$json_content" | jq -r '.interactive_packages[]' 2>/dev/null); then
+        echo -e "${RED}Error: Failed to parse interactive_packages from JSON${NC}"
+        echo "DEBUG: JSON content for interactive_packages:"
+        echo "$json_content" | jq '.interactive_packages' || echo "Failed to show interactive_packages content"
+    else
+        echo "DEBUG: Found interactive packages:"
+        echo "$interactive_packages"
+        
         while IFS= read -r package; do
+            [ -z "$package" ] && continue
             echo "DEBUG: Installing interactive package: $package"
             if [ "$package" = "plasma" ]; then
                 if [ -n "$SUDO_PASS" ]; then
@@ -209,39 +238,54 @@ install_packages() {
                     printf "all\n" | sudo pacman -S --needed plasma || true
                 fi
             fi
-            # Add other interactive packages here if needed
         done <<< "$interactive_packages"
     fi
     
     # Second pass: Install regular pacman packages
     echo -e "${YELLOW}Installing packages from official repositories...${NC}"
-    local pacman_packages
-    pacman_packages=$(echo "$json_content" | jq -r '.pacman_packages[]' 2>/dev/null)
-    
-    if [ -n "$pacman_packages" ]; then
+    if ! pacman_packages=$(echo "$json_content" | jq -r '.pacman_packages[]' 2>/dev/null); then
+        echo -e "${RED}Error: Failed to parse pacman_packages from JSON${NC}"
+        echo "DEBUG: JSON content for pacman_packages:"
+        echo "$json_content" | jq '.pacman_packages' || echo "Failed to show pacman_packages content"
+    else
+        echo "DEBUG: Found pacman packages, converting to array..."
+        
         # Convert newline-separated list to array
         local packages=()
         while IFS= read -r package; do
+            [ -z "$package" ] && continue
             packages+=("$package")
         done <<< "$pacman_packages"
         
         if [ ${#packages[@]} -gt 0 ]; then
             echo "DEBUG: Installing ${#packages[@]} regular packages"
+            echo "DEBUG: Package list: ${packages[*]}"
             if [ -n "$SUDO_PASS" ]; then
-                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${packages[@]}" || true
+                printf "%s\n" "$SUDO_PASS" | sudo -S pacman -S --needed --noconfirm "${packages[@]}" || {
+                    echo -e "${RED}Warning: Some packages failed to install${NC}"
+                }
             else
-                sudo pacman -S --needed --noconfirm "${packages[@]}" || true
+                sudo pacman -S --needed --noconfirm "${packages[@]}" || {
+                    echo -e "${RED}Warning: Some packages failed to install${NC}"
+                }
             fi
+        else
+            echo "DEBUG: No regular packages to install"
         fi
     fi
     
     # Third pass: Install AUR packages
     echo -e "${YELLOW}Installing AUR packages...${NC}"
-    local aur_packages
-    aur_packages=$(echo "$json_content" | jq -r '.aur_packages[]' 2>/dev/null)
-    
-    if [ -n "$aur_packages" ]; then
+    if ! aur_packages=$(echo "$json_content" | jq -r '.aur_packages[]' 2>/dev/null); then
+        echo -e "${RED}Error: Failed to parse aur_packages from JSON${NC}"
+        echo "DEBUG: JSON content for aur_packages:"
+        echo "$json_content" | jq '.aur_packages' || echo "Failed to show aur_packages content"
+    else
+        echo "DEBUG: Found AUR packages:"
+        echo "$aur_packages"
+        
         while IFS= read -r package; do
+            [ -z "$package" ] && continue
             echo "DEBUG: Installing AUR package: $package"
             if [ -n "$SUDO_PASS" ]; then
                 printf "%s\n" "$SUDO_PASS" | \
@@ -251,17 +295,23 @@ install_packages() {
                     USER="$REAL_USER" \
                     LOGNAME="$REAL_USER" \
                     PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
-                    yay -S --needed --noconfirm --sudoflags "-S" "$package" || true
+                    yay -S --needed --noconfirm --sudoflags "-S" "$package" || {
+                        echo -e "${RED}Warning: Failed to install AUR package: $package${NC}"
+                    }
             else
                 sudo -u "$REAL_USER" \
                     HOME="/home/$REAL_USER" \
                     USER="$REAL_USER" \
                     LOGNAME="$REAL_USER" \
                     PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" \
-                    yay -S --needed --noconfirm "$package" || true
+                    yay -S --needed --noconfirm "$package" || {
+                        echo -e "${RED}Warning: Failed to install AUR package: $package${NC}"
+                    }
             fi
         done <<< "$aur_packages"
     fi
+    
+    echo "DEBUG: Package installation completed"
 }
 
 # Function to setup dotfiles
