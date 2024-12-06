@@ -7,23 +7,16 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 LAUNCHDIR="/root/arch-install"
 
-# Determine the real user (non-root) who invoked the script
-if [ "$SUDO_USER" ]; then
-    REAL_USER="$SUDO_USER"
-elif [ "$DOAS_USER" ]; then
-    REAL_USER="$DOAS_USER"
-else
-    # If not run with sudo/doas, use the current user
-    REAL_USER="$(whoami)"
-fi
+# Get the real user (the one who invoked sudo, or default to the regular user)
+REAL_USER=${SUDO_USER:-$USERNAME}
 
-# If we're root and no SUDO_USER/DOAS_USER was found, error out
-if [ "$REAL_USER" = "root" ]; then
-    echo -e "${RED}Error: Could not determine the real user. Please run this script with sudo/doas${NC}"
+if [ -z "$REAL_USER" ]; then
+    echo "Error: Could not determine user. Set USERNAME in environment"
     exit 1
 fi
 
-REAL_HOME="/home/$REAL_USER"
+export HOME="/home/$REAL_USER"  # Force HOME to be user's home
+REAL_HOME="$HOME"
 
 # Verify user exists
 if ! id "$REAL_USER" >/dev/null 2>&1; then
@@ -442,4 +435,9 @@ main() {
 }
 
 # Run the script
-main 
+if [ "$(whoami)" = "root" ]; then
+    # If running as root, re-execute as the target user with sudo
+    exec sudo -u "$REAL_USER" -E "$0" "$@"
+else
+    main
+fi 

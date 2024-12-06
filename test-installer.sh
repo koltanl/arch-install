@@ -11,9 +11,9 @@ PRESEED_CONF="$SCRIPT_DIR/install/preseed.conf"
 VM_STATE_DIR="$SCRIPT_DIR/vm_states"
 DEBUG=0
 DEPLOYMENT_SCRIPT="install/deploymentArch.sh"
-REMOTE_DEPLOYMENT_PATH="/root/deploymentArch.sh"
+REMOTE_DEPLOYMENT_PATH="/root/arch-install/install/deploymentArch.sh"
 SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
-VM_IP="192.168.111.111"
+VM_IP="192.168.111.158"
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
 
@@ -22,6 +22,7 @@ if [ -f "$PRESEED_CONF" ]; then
     # Use grep and cut to extract values, with error checking
     ROOT_PASSWORD=$(grep "^ROOT_PASSWORD=" "$PRESEED_CONF" | cut -d'"' -f2)
     USERNAME=$(grep "^USERNAME=" "$PRESEED_CONF" | cut -d'"' -f2)
+    USER_PASSWORD=$(grep "^USER_PASSWORD=" "$PRESEED_CONF" | cut -d'"' -f2)
     
     if [ -z "$ROOT_PASSWORD" ]; then
         echo "Error: Could not extract ROOT_PASSWORD from preseed.conf"
@@ -31,6 +32,10 @@ if [ -f "$PRESEED_CONF" ]; then
         echo "Error: Could not extract USERNAME from preseed.conf"
         exit 1
     fi
+    if [ -z "$USER_PASSWORD" ]; then
+        echo "Error: Could not extract USER_PASSWORD from preseed.conf"
+        exit 1
+    fi
 else
     echo "Error: preseed.conf not found at $PRESEED_CONF"
     exit 1
@@ -38,7 +43,7 @@ fi
 
 # Now define variables that depend on preseed values
 SSH_USER="$USERNAME"
-SSH_PASS="$ROOT_PASSWORD"
+SSH_PASS="$USER_PASSWORD"
 
 # Function to show usage
 show_usage() {
@@ -53,7 +58,24 @@ show_usage() {
     echo "  --help, -h           Show this help message"
     exit 1
 }
-
+# Function to wait for VM creation
+wait_for_vm_creation() {
+    local retries=30
+    local wait_time=5
+    
+    echo "Waiting for VM to be created..."
+    for ((i=1; i<=retries; i++)); do
+        if virsh --connect qemu:///system list | grep -q "$VM_NAME"; then
+            echo "VM creation confirmed!"
+            return 0
+        fi
+        echo "Attempt $i/$retries - VM not ready, waiting ${wait_time}s..."
+        sleep $wait_time
+    done
+    
+    echo "Failed to confirm VM creation after $retries attempts"
+    return 1
+}
 # Function for cleanup
 cleanup() {
     echo "Cleaning up any failed states..."
@@ -157,10 +179,35 @@ restore_vm_state() {
         return 1
     fi
     
+    if [ ! -f "$state_dir/disk.qcow2" ] || [ ! -f "$state_dir/config.xml" ]; then
+        echo "Error: Incomplete VM state - missing required files"
+        return 1
+    fi
+    
     echo "Restoring VM state from $state_dir..."
     
-    # Clean up existing VM
-    cleanup
+    # Stop the VM if it's running, but don't destroy it
+    if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
+        echo "Shutting down running VM..."
+        virsh --connect qemu:///system shutdown "$VM_NAME"
+        # Wait for shutdown
+        for i in {1..30}; do
+            if ! virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
+                break
+            fi
+            sleep 1
+        done
+        # Force stop if graceful shutdown failed
+        if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
+            virsh --connect qemu:///system destroy "$VM_NAME"
+        fi
+    fi
+    
+    # Undefine VM but keep storage
+    if virsh --connect qemu:///system list --all | grep -q "$VM_NAME"; then
+        echo "Undefining VM configuration..."
+        virsh --connect qemu:///system undefine "$VM_NAME" --nvram
+    fi
     
     # Restore disk image
     echo "Restoring disk image..."
@@ -168,7 +215,11 @@ restore_vm_state() {
     
     # Restore VM configuration
     echo "Restoring VM configuration..."
-    sudo virsh --connect qemu:///system define "$state_dir/config.xml"
+    virsh --connect qemu:///system define "$state_dir/config.xml"
+    
+    # Start the VM
+    echo "Starting restored VM..."
+    virsh --connect qemu:///system start "$VM_NAME"
     
     echo "VM state restored successfully"
     return 0
@@ -258,13 +309,54 @@ wait_for_ssh() {
 
 update_deployment_script() {
     echo "Updating deployment script on VM..."
-    if ! sshpass -p "$SSH_PASS" scp -o StrictHostKeyChecking=no "$DEPLOYMENT_SCRIPT" "${SSH_USER}@${VM_IP}:${REMOTE_DEPLOYMENT_PATH}"; then
+    
+    # First copy to user's home
+    if ! sshpass -p "$SSH_PASS" scp -o StrictHostKeyChecking=no "$DEPLOYMENT_SCRIPT" "${SSH_USER}@${VM_IP}:/home/${SSH_USER}/deploymentArch.sh"; then
         echo "Failed to copy deployment script to VM"
         return 1
     fi
     
     echo "Running updated deployment script..."
-    if ! sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${VM_IP}" "chmod +x ${REMOTE_DEPLOYMENT_PATH} && ${REMOTE_DEPLOYMENT_PATH}"; then
+    # Use heredoc with set -x for debugging and proper error handling
+    if ! sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${VM_IP}" /bin/bash << EOF
+        set -x  # Enable command tracing
+        
+        # Create askpass script
+        cat > /home/${SSH_USER}/askpass.sh << 'ASKPASS'
+#!/bin/bash
+echo "$SSH_PASS"
+ASKPASS
+        chmod +x /home/${SSH_USER}/askpass.sh
+        
+        # Create directory and set permissions
+        echo "$SSH_PASS" | sudo -S mkdir -p /root/arch-install/install
+        echo "$SSH_PASS" | sudo -S chmod 755 /root/arch-install
+        echo "$SSH_PASS" | sudo -S chmod 755 /root/arch-install/install
+        
+        # Copy script and set permissions ensuring both root and user can access
+        echo "$SSH_PASS" | sudo -S cp /home/${SSH_USER}/deploymentArch.sh ${REMOTE_DEPLOYMENT_PATH}
+        echo "$SSH_PASS" | sudo -S chown root:root ${REMOTE_DEPLOYMENT_PATH}
+        echo "$SSH_PASS" | sudo -S chmod 755 ${REMOTE_DEPLOYMENT_PATH}
+        
+        # Also keep a copy in user's home with proper permissions
+        cp /home/${SSH_USER}/deploymentArch.sh /home/${SSH_USER}/deploymentArch.sh.local
+        chmod 755 /home/${SSH_USER}/deploymentArch.sh.local
+        
+        # Debug information
+        echo "Script permissions:"
+        sudo ls -l ${REMOTE_DEPLOYMENT_PATH}
+        ls -l /home/${SSH_USER}/deploymentArch.sh.local
+        
+        # Execute script with environment variables for sudo password handling
+        export SUDO_ASKPASS="/home/${SSH_USER}/askpass.sh"
+        export USERNAME="${SSH_USER}"
+        export SUDO_PASS="${SSH_PASS}"
+        /home/${SSH_USER}/deploymentArch.sh.local
+        
+        # Clean up askpass script
+        rm /home/${SSH_USER}/askpass.sh
+EOF
+    then
         echo "Failed to execute deployment script on VM"
         return 1
     fi
@@ -281,6 +373,7 @@ if [ "$UPDATE_DEPLOY" = true ]; then
         echo "Failed to establish SSH connection to update deployment script"
         exit 1
     fi
+    exit 0
 fi
 
 # Ensure cleanup is called both on error and before creating new VM
@@ -459,27 +552,11 @@ If the console window doesn't open automatically, you can connect manually with:
 To destroy the test VM when done:
     virsh --connect qemu:///system destroy $VM_NAME
     virsh --connect qemu:///system undefine $VM_NAME --remove-all-storage
--------------------------------------------------------------------------------" 
+-------------------------------------------------------------------------------"
 
-wait_for_vm_creation() {
-    local retries=30
-    local wait_time=5
-    
-    echo "Waiting for VM to be created..."
-    for ((i=1; i<=retries; i++)); do
-        if virsh --connect qemu:///system list | grep -q "$VM_NAME"; then
-            echo "VM creation confirmed!"
-            return 0
-        fi
-        echo "Attempt $i/$retries - VM not ready, waiting ${wait_time}s..."
-        sleep $wait_time
-    done
-    
-    echo "Failed to confirm VM creation after $retries attempts"
-    return 1
-}
 
-# Add this after the virt-install command:
+
+# Wait for VM creation
 if ! wait_for_vm_creation; then
     handle_error "Failed to confirm VM creation"
 fi
