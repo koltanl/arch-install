@@ -7,20 +7,22 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 LAUNCHDIR="/root/arch-install"
 
-# Source the preseed configuration
-if [ -f "$LAUNCHDIR/install/preseed.conf" ]; then
-    # shellcheck source=/dev/null
-    source "$LAUNCHDIR/install/preseed.conf"
+# Determine the real user (non-root) who invoked the script
+if [ "$SUDO_USER" ]; then
+    REAL_USER="$SUDO_USER"
+elif [ "$DOAS_USER" ]; then
+    REAL_USER="$DOAS_USER"
 else
-    echo -e "${RED}Error: preseed.conf not found at $LAUNCHDIR/install/preseed.conf${NC}"
+    # If not run with sudo/doas, use the current user
+    REAL_USER="$(whoami)"
+fi
+
+# If we're root and no SUDO_USER/DOAS_USER was found, error out
+if [ "$REAL_USER" = "root" ]; then
+    echo -e "${RED}Error: Could not determine the real user. Please run this script with sudo/doas${NC}"
     exit 1
 fi
 
-# Test mode flag
-TEST_MODE=${TEST_MODE:-false}
-
-# Set user variables from preseed configuration
-REAL_USER="${USERNAME:-$SUDO_USER}"
 REAL_HOME="/home/$REAL_USER"
 
 # Verify user exists
@@ -28,6 +30,9 @@ if ! id "$REAL_USER" >/dev/null 2>&1; then
     echo -e "${RED}Error: User $REAL_USER does not exist${NC}"
     exit 1
 fi
+
+# Test mode flag
+TEST_MODE=${TEST_MODE:-false}
 
 # Function to handle errors but continue execution
 handle_error() {

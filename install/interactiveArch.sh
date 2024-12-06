@@ -258,7 +258,7 @@ prompt_for_processor_and_graphics() {
         GRAPHICS_TYPE=${GRAPHICS_TYPE:-$DEFAULT_GPU}
         case $GRAPHICS_TYPE in
             1) 
-                GRAPHICS_DRIVER="mesa libva-intel-driver intel-media-driver"
+                GRAPHICS_DRIVER="mesa intel-graphics-driver libvdpau-va-gl vulkan-intel"
                 echo "Selected: Intel graphics drivers"
                 break
                 ;;
@@ -605,9 +605,6 @@ systemctl enable sddm
 systemctl enable NetworkManager
 systemctl enable bluetooth
 
-
-# Add user to libvirt group
-usermod -aG libvirt "${USERNAME}"
 
 CHROOT
 

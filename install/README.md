@@ -1,154 +1,116 @@
-# Installation Guide
+# Arch Linux Installation System
 
-This guide explains the two-phase installation process using `preseedArch.sh` and `deploymentArch.sh`.
+A three-phase installation system for Arch Linux: preseed, interactive, or automated installation.
 
-## Prerequisites
+## Scripts Overview
 
-- A bootable Arch Linux USB (see main README for build instructions)
-- Internet connection
-- Target disk or partition for installation
-
-## Phase 1: Base System Installation
-
-### Pre-Installation Steps
-
-1. Boot from Arch Linux USB
-2. Verify internet connection:
-   ```bash
-   ping -c 3 archlinux.org
-   ```
-
-### Running preseedArch.sh
-
-1. Get the installation files:
+### preseedArch.sh
+Base installation script that can run in three modes:
 ```bash
-# Clone the repository
-git clone https://github.com/koltanl/arch-install.git
-cd arch-install/install
-```
+# Interactive mode (default)
+./preseedArch.sh
 
-2. Start the installation:
-```bash
+# Automated mode with config
+CONFIG_FILE=/path/to/preseed.conf ./preseedArch.sh
+
+# Preseeded mode (looks for preseed.conf in installation media)
 ./preseedArch.sh
 ```
 
-> Note: The script will automatically copy the deployment files to `/root/arch-install` on your new system, so they'll be ready after reboot.
-
-#### Script Prompts
-
-The script will ask for:
-
-- **Disk Type Selection**
-  - SATA/IDE (e.g., /dev/sda)
-  - NVMe (e.g., /dev/nvme0n1)
-
-- **Installation Target**
-  - Whole disk
-  - Specific partition (e.g., /dev/nvme0n1p4)
-
-- **User Information**
-  - Root password
-  - Username
-  - User password
-
-- **Encryption Password**
-  - For root partition (if using single partition)
-  - For home partition (if using whole disk)
-
-- **Bootloader Type**
-  - UEFI
-  - Legacy BIOS
-
-- **Hardware Information**
-  - Processor type (Intel/AMD)
-  - Graphics card type (Intel/AMD/Nvidia)
-
-## Phase 2: System Configuration
-
-After rebooting into your new system, run the deployment script for additional setup.
-
-### Running deploymentArch.sh
-
-1. Log into your new system
-2. Navigate to the deployment files:
+### deploymentArch.sh
+Post-installation configuration script that sets up:
 ```bash
+# Run after first boot
 cd /root/arch-install
-```
-3. Run the deployment script:
-```bash
 ./install/deploymentArch.sh
 ```
 
-#### What Gets Configured
+Configures:
+- Package management (yay)
+- Desktop environment (KDE Plasma)
+- Development tools (kitty, zsh, nnn)
+- User configurations and dotfiles
 
-- **Package Management**
-  - Yay AUR helper
-  - System packages
-  - Custom Pacman configuration
+## Configuration Files
 
-- **Desktop Environment**
-  - KDE Plasma with custom configs
-  - Window management rules
-  - System shortcuts
+### preseed.conf.template
+Base template for system configuration:
+```bash
+# Disk setup
+DISK_TYPE=3                # 1=SATA, 2=NVMe, 3=Virtio
+DISK="/dev/vda"           # Target installation disk
 
-- **Development Environment**
-  - Kitty terminal + themes
-  - Zsh + plugins
-  - Development tools
-  - Utility scripts
+# User accounts
+USERNAME="archuser"        # Regular user account
+ROOT_PASSWORD="root123"    # Root password
+USER_PASSWORD="user123"    # User password
+ENCRYPTION_PASSWORD="enc123" # Disk encryption
 
-- **Virtualization**
-  - KVM/QEMU configuration
-  - Network bridges
-  - SPICE support
+# System config
+BOOTLOADER="UEFI"         # UEFI or BIOS
+PROCESSOR_TYPE=1          # 1=Intel, 2=AMD
+GRAPHICS_TYPE=5           # 1=Intel, 2=AMD, 3=NVIDIA, 4=Basic, 5=VM
+HOSTNAME="archbox"        # System hostname
 
-## Partition Layouts
+# Partition sizes (GB)
+ROOT_PARTITION_SIZE=20    # Root partition
+BOOT_PARTITION_SIZE=1     # Boot partition
+EFI_PARTITION_SIZE=1      # EFI partition
+SWAP_SIZE=8              # Swap file size
+```
 
-### Single Partition Setup
-- Selected partition will be encrypted and used as root
-- Boot/EFI partitions created at end of disk
-- 8GB swap file created on root partition
+### .preseed.conf
+Example configuration for VM testing:
+```bash
+DISK_TYPE=3              # Virtio for VM
+DISK="/dev/vda"         # VM disk device
+USERNAME="anon"         # Test account
+HOSTNAME="lapbox"       # VM hostname
+ROOT_PARTITION_SIZE=100 # Larger root for testing
+SWAP_SIZE=4            # Smaller swap for VM
+```
 
-### Full Disk Setup
-- EFI/Boot partitions (based on bootloader type)
-- 100GB root partition (ext4)
-- Remaining space for encrypted home partition (ext4)
-- 8GB swap file
+## Installation Methods
+
+### Interactive Mode
+Guided installation with prompts for:
+- Hardware detection/configuration
+- Disk partitioning
+- User setup
+- System configuration
+
+### Automated Mode
+Unattended installation using config file:
+1. `cp install/.preseed.conf install/preseed.conf`
+2. Edit `preseed.conf`
+3. Run with `CONFIG_FILE` set
+
+### Preseeded Mode
+For reproducible installations:
+1. Use template from `.preseed.conf`
+2. Place in installation media
+3. Boot and run
+
+## System Layout
+
+### Partition Schemes
+- **Single Partition**: Encrypted root + boot/EFI + swap
+- **Full Disk**: EFI + boot + root (100GB) + encrypted home + swap
+
+### Hardware Support
+- Storage: SATA, NVMe, Virtio
+- CPU: Intel/AMD
+- Graphics: Intel/AMD/NVIDIA
+- Boot: UEFI/Legacy BIOS
 
 ## Troubleshooting
 
-### Phase 1 Issues:
-1. **GRUB Installation Fails**
-   - Script attempts multiple installation methods
-   - Check EFI/BIOS settings
+### Installation
+- Boot issues: Check UEFI/BIOS settings
+- Encryption: Verify cryptsetup config
+- Hardware: Check compatibility/drivers
 
-2. **Encryption Issues**
-   - Verify password input
-   - Check if cryptsetup is working properly
-
-3. **Partition Mounting Fails**
-   - Verify partition exists
-   - Check filesystem creation success
-
-### Phase 2 Issues:
-1. **Package Installation**
-   - Check internet connection
-   - Update package databases
-   - Verify package names
-
-2. **Desktop Environment**
-   - Ensure plasma-desktop is installed
-   - Check KDE dependencies
-
-3. **Virtualization**
-   - Verify CPU virtualization support
-   - Check kernel modules
-
-## Notes
-
-- Backup any important data before installation
-- Ensure secure password selection
-- Note your encryption password - it cannot be recovered
-- For VMs, ensure EFI/BIOS settings match host configuration
-
-For additional help, file an issue at https://github.com/koltanl/arch-install/issues
+### Configuration
+- Desktop: Check graphics/display setup
+- Network: Verify NetworkManager
+- Users: Check sudo/permissions

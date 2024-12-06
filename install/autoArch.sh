@@ -112,7 +112,7 @@ setup_environment() {
 
     # Set graphics driver
     case $GRAPHICS_TYPE in
-        1) GRAPHICS_DRIVER="mesa libva-intel-driver intel-media-driver" ;;
+        1) GRAPHICS_DRIVER="mesa intel-graphics-driver libvdpau-va-gl vulkan-intel" ;;
         2) GRAPHICS_DRIVER="mesa libva-mesa-driver mesa-vdpau" ;;
         3) GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia" ;;
         4) GRAPHICS_DRIVER="xf86-video-vesa" ;;
