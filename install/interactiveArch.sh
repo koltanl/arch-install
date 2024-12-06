@@ -258,17 +258,17 @@ prompt_for_processor_and_graphics() {
         GRAPHICS_TYPE=${GRAPHICS_TYPE:-$DEFAULT_GPU}
         case $GRAPHICS_TYPE in
             1) 
-                GRAPHICS_DRIVER="mesa intel-graphics-driver libvdpau-va-gl vulkan-intel"
+                GRAPHICS_DRIVER="mesa xf86-video-intel vulkan-intel"
                 echo "Selected: Intel graphics drivers"
                 break
                 ;;
             2) 
-                GRAPHICS_DRIVER="mesa libva-mesa-driver mesa-vdpau"
+                GRAPHICS_DRIVER="mesa xf86-video-amdgpu"
                 echo "Selected: AMD graphics drivers"
                 break
                 ;;
             3) 
-                GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings opencl-nvidia"
+                GRAPHICS_DRIVER="nvidia nvidia-utils nvidia-settings"
                 echo "Selected: NVIDIA graphics drivers"
                 break
                 ;;
