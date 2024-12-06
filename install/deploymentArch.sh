@@ -6,8 +6,28 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 LAUNCHDIR="/root/arch-install"
+
+# Source the preseed configuration
+if [ -f "$LAUNCHDIR/install/preseed.conf" ]; then
+    # shellcheck source=/dev/null
+    source "$LAUNCHDIR/install/preseed.conf"
+else
+    echo -e "${RED}Error: preseed.conf not found at $LAUNCHDIR/install/preseed.conf${NC}"
+    exit 1
+fi
+
 # Test mode flag
 TEST_MODE=${TEST_MODE:-false}
+
+# Set user variables from preseed configuration
+REAL_USER="${USERNAME:-$SUDO_USER}"
+REAL_HOME="/home/$REAL_USER"
+
+# Verify user exists
+if ! id "$REAL_USER" >/dev/null 2>&1; then
+    echo -e "${RED}Error: User $REAL_USER does not exist${NC}"
+    exit 1
+fi
 
 # Function to handle errors but continue execution
 handle_error() {
@@ -31,23 +51,53 @@ install_yay() {
 
     if ! command_exists yay; then
         echo -e "${YELLOW}Installing yay...${NC}"
-        sudo pacman -S --needed git base-devel --noconfirm
-        git clone https://aur.archlinux.org/yay.git /tmp/yay
-        (cd /tmp/yay && makepkg -si --noconfirm)
-        rm -rf /tmp/yay
+        # Install dependencies
+        sudo pacman -S --needed git base-devel --noconfirm || handle_error "Failed to install yay dependencies"
+        
+        # Create a temporary user for building yay
+        local BUILD_USER="makepkg_user"
+        local BUILD_DIR="/tmp/yay-build"
+        
+        # Clean up any previous build attempts
+        rm -rf "$BUILD_DIR"
+        mkdir -p "$BUILD_DIR"
+        
+        # Create build user if it doesn't exist
+        if ! id "$BUILD_USER" &>/dev/null; then
+            useradd -m "$BUILD_USER"
+        fi
+        
+        # Give build user ownership of the build directory
+        chown -R "$BUILD_USER":"$BUILD_USER" "$BUILD_DIR"
+        
+        # Clone and build yay as the build user
+        cd "$BUILD_DIR"
+        sudo -u "$BUILD_USER" git clone https://aur.archlinux.org/yay.git "$BUILD_DIR"
+        cd "$BUILD_DIR"
+        sudo -u "$BUILD_USER" makepkg -si --noconfirm
+        
+        # Clean up
+        cd /
+        rm -rf "$BUILD_DIR"
+        userdel -r "$BUILD_USER" 2>/dev/null || true
+        
+        if ! command_exists yay; then
+            handle_error "Yay installation failed"
+            return 1
+        fi
     fi
 }
 
 # Function to install zplug if not present
 install_zplug() {
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install zplug to $HOME/.zplug${NC}"
+        echo -e "${YELLOW}TEST MODE: Would install zplug to $REAL_HOME/.zplug${NC}"
         return 0
     fi
 
-    if [ ! -d "$HOME/.zplug" ]; then
+    if [ ! -d "$REAL_HOME/.zplug" ]; then
         echo -e "${YELLOW}Installing zplug...${NC}"
-        git clone https://github.com/zplug/zplug "$HOME/.zplug"
+        sudo -u "$REAL_USER" git clone https://github.com/zplug/zplug "$REAL_HOME/.zplug"
     fi
 }
 
@@ -95,25 +145,29 @@ setup_dotfiles() {
     echo -e "${YELLOW}Setting up dotfiles...${NC}"
     
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would copy dotfiles to $HOME${NC}"
+        echo -e "${YELLOW}TEST MODE: Would copy dotfiles to $REAL_HOME${NC}"
         return 0
     fi
     
     # Create necessary directories
-    mkdir -p "$HOME/.config"
-    mkdir -p "$HOME/bin"
-    mkdir -p "$HOME/.local/share"  # Some apps need this
+    mkdir -p "$REAL_HOME/.config"
+    mkdir -p "$REAL_HOME/bin"
+    mkdir -p "$REAL_HOME/.local/share"
+    
+    # Set proper ownership
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config"
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/bin"
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.local"
     
     # Copy dotfiles
     if [ -d "$LAUNCHDIR/dotfiles" ]; then
-        echo "Copying dotfiles from $LAUNCHDIR/dotfiles"
-        # Copy all dotfiles, including hidden ones
+        echo "Copying dotfiles from $LAUNCHDIR/dotfiles to $REAL_HOME"
         for file in "$LAUNCHDIR/dotfiles"/.* "$LAUNCHDIR/dotfiles"/*; do
             basename=$(basename "$file")
-            # Skip . and .. directory entries and non-existent files (from empty globs)
             if [[ "$basename" != "." && "$basename" != ".." && -f "$file" ]]; then
-                echo "Copying $basename to $HOME/"
-                cp "$file" "$HOME/$basename"
+                echo "Copying $basename to $REAL_HOME/"
+                cp "$file" "$REAL_HOME/$basename"
+                chown "$REAL_USER":"$REAL_USER" "$REAL_HOME/$basename"
             fi
         done
     else
@@ -124,16 +178,15 @@ setup_dotfiles() {
 # Function to install oh-my-posh
 install_oh_my_posh() {
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install oh-my-posh to $HOME/bin${NC}"
+        echo -e "${YELLOW}TEST MODE: Would install oh-my-posh to $REAL_HOME/bin${NC}"
         return 0
     fi
 
     if ! command_exists oh-my-posh; then
         echo -e "${YELLOW}Installing oh-my-posh...${NC}"
-        sudo mkdir -p /tmp/bin
-        mkdir -p "$HOME/bin"
-        sudo curl -s https://ohmyposh.dev/install.sh | sudo bash -s -- -d /tmp/bin
-        curl -s https://ohmyposh.dev/install.sh | bash -s -- -d "$HOME/bin"
+        mkdir -p "$REAL_HOME/bin"
+        chown "$REAL_USER":"$REAL_USER" "$REAL_HOME/bin"
+        sudo -u "$REAL_USER" curl -s https://ohmyposh.dev/install.sh | bash -s -- -d "$REAL_HOME/bin"
     fi
 }
 
@@ -159,12 +212,14 @@ setup_kitty() {
         return 0
     fi
 
-    # Create kitty config directory if it doesn't exist
-    mkdir -p "$HOME/.config/kitty"
+    # Create kitty config directory
+    mkdir -p "$REAL_HOME/.config/kitty"
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/kitty"
 
     # Copy kitty configuration files
     if [ -d "$LAUNCHDIR/kitty" ]; then
-        cp -r "$LAUNCHDIR/kitty/"* "$HOME/.config/kitty/" 2>/dev/null || true
+        cp -r "$LAUNCHDIR/kitty/"* "$REAL_HOME/.config/kitty/" 2>/dev/null || true
+        chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/kitty"
     else
         handle_error "Kitty configuration directory not found"
     fi
@@ -173,12 +228,12 @@ setup_kitty() {
 # Function to setup KDE configurations
 setup_kde() {
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would setup KDE configurations in $HOME/.config${NC}"
+        echo -e "${YELLOW}TEST MODE: Would setup KDE configurations in $REAL_HOME/.config${NC}"
         return 0
     fi
 
     echo -e "${YELLOW}Setting up KDE configurations...${NC}"
-    local kde_config_dir="$HOME/.config"
+    local kde_config_dir="$REAL_HOME/.config"
     
     # Create necessary directories
     mkdir -p "$kde_config_dir"
@@ -221,12 +276,12 @@ setup_kde() {
 # Function to setup scripts
 setup_scripts() {
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would copy and make executable scripts in $HOME/bin${NC}"
+        echo -e "${YELLOW}TEST MODE: Would copy and make executable scripts in $REAL_HOME/bin${NC}"
         return 0
     fi
 
     echo -e "${YELLOW}Setting up utility scripts...${NC}"
-    local bin_dir="$HOME/bin"
+    local bin_dir="$REAL_HOME/bin"
     mkdir -p "$bin_dir"
     
     # Create utils subdirectory if it exists in source
@@ -246,12 +301,12 @@ setup_scripts() {
 # Function to setup oh-my-posh theme
 setup_omp() {
     if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would setup oh-my-posh configuration in $HOME/.config${NC}"
+        echo -e "${YELLOW}TEST MODE: Would setup oh-my-posh configuration in $REAL_HOME/.config${NC}"
         return 0
     fi
 
     echo -e "${YELLOW}Setting up oh-my-posh configuration...${NC}"
-    local config_dir="$HOME/.config"
+    local config_dir="$REAL_HOME/.config"
     mkdir -p "$config_dir"
     
     cp "$LAUNCHDIR/dotfiles/omp.json" "$config_dir/"
