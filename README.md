@@ -32,6 +32,7 @@ sudo dd bs=4M if=isoout/archlinux*.iso of=/dev/sdX status=progress oflag=sync
 - Boot from the USB drive
 - Follow the installation prompts
 - After installation completes, reboot into your new system
+- Log in and run `ip a` to find your new system's IP address
 
 4. Complete Setup Remotely:
 ```bash
