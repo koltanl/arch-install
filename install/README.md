@@ -2,29 +2,22 @@
 
 Automated, interactive, and preseeded installation system for Arch Linux with full disk encryption support.
 
-## Installation Methods
+## Quick Start
 
-### 1. Interactive Mode (Default)
+1. Run the build script to create installation media:
 ```bash
-./install/preseedArch.sh
-```
-Guided installation with prompts for hardware, disk, and system configuration.
-
-### 2. Automated Mode
-```bash
-CONFIG_FILE=/path/to/preseed.conf ./install/preseedArch.sh
-```
-Unattended installation using a configuration file.
-
-### 3. Preseeded Mode
-```bash
-# Place preseed.conf in installation media
-./install/preseedArch.sh
+./build-iso.sh
 ```
 
-## Configuration
+2. The installation type is determined automatically:
+- If `preseed.conf` exists: Runs unattended installation
+- If `preseed.conf` is missing/renamed: Runs interactive installation
 
-### preseed.conf
+> **Note:** For interactive installation, simply rename or delete `preseed.conf`
+
+## Configuration Options
+
+### preseed.conf (for unattended installation)
 ```bash
 # Hardware Configuration
 DISK_TYPE=3              # 1=SATA, 2=NVMe, 3=Virtio
@@ -41,96 +34,44 @@ SWAP_SIZE=8            # Swap size (GB)
 ```
 
 ### Package Management
-The system uses a JSON-based package configuration file:
+The system uses a customizable JSON-based package configuration:
 
 ```bash
 install/pkglist.json    # Package list configuration
 ```
 
-#### Package List Structure
+You can modify this file to include your preferred packages while maintaining the following structure:
+
 ```json
 {
     "interactive_packages": [
-        # Packages requiring user interaction during installation
-        # e.g., "plasma"
+        # Packages requiring user interaction
     ],
     "pacman_packages": [
         # Official repository packages
-        # e.g., "firefox", "git"
     ],
     "aur_packages": [
         # AUR packages
-        # e.g., "visual-studio-code-bin"
     ]
 }
 ```
 
-#### Customizing Interactive Package Installation
+> **Note:** The current configuration includes a full KDE Plasma desktop environment by default.
+
+### Handling Interactive Packages
 For packages requiring custom interaction during installation:
 
-1. Add the package to the `interactive_packages` array in `pkglist.json`
-2. Modify the `install_packages` function in `deploymentArch.sh`:
+1. Add the package to `interactive_packages` in `pkglist.json`
+2. Add handling in `deploymentArch.sh`:
 ```bash
 if [ "$package" = "your_package" ]; then
-    # Handle your package's interactive installation
+    # Handle package's interactive installation
     { echo "1"; echo "2"; } | sudo -S pacman -S --needed your_package
 fi
 ```
-The example above sends "1" and "2" as responses to interactive prompts.
 
-#### Customizing Package Selection
-1. Edit `pkglist.json`
-2. Modify package lists in appropriate sections
-3. Run deployment script to apply changes:
-```bash
-cd /root/arch-install
-./install/deploymentArch.sh
-```
+## Development Workflow
 
-## Installation Process
-
-1. Base System (`preseedArch.sh`)
-   - Hardware detection
-   - Disk partitioning and encryption
-   - Base system installation
-   - Initial configuration
-
-2. Post-Installation (`deploymentArch.sh`)
-```bash
-cd /root/arch-install
-./install/deploymentArch.sh
-```
-   - Package management (yay)
-   - Desktop environment (KDE Plasma)
-   - Development tools
-   - User configurations
-
-## System Layout
-
-### Partition Scheme
-- EFI System Partition (1GB)
-- Boot Partition (1GB)
-- Encrypted Root Partition
-- Swap (file-based)
-
-### Hardware Support
-- Storage: SATA, NVMe, Virtio
-- CPU: Intel, AMD
-- Graphics: Intel, AMD, NVIDIA, VM
-- Boot: UEFI, Legacy BIOS
-
-## Troubleshooting
-
-### Common Issues
-- UEFI/BIOS: Verify boot mode matches configuration
-- Encryption: Check LUKS setup and passwords
-- Graphics: Ensure correct driver selection
-- Network: Verify NetworkManager status
-
-### Logs
-Installation logs are available at `/tmp/preseed.log`
-
-### Development Workflow
 The development process follows these steps:
 
 1. Run the full test suite:
@@ -157,3 +98,41 @@ The development process follows these steps:
    ./test-installer.sh -r
    ```
    This allows for rapid testing cycles without rebuilding from scratch.
+
+## System Layout
+
+### Partition Scheme
+- EFI System Partition (1GB)
+- Boot Partition (1GB)
+- Encrypted Root Partition
+- Swap (file-based)
+
+### Hardware Support
+- Storage: SATA, NVMe, Virtio
+- CPU: Intel, AMD
+- Graphics: Intel, AMD, NVIDIA, VM
+- Boot: UEFI, Legacy BIOS
+
+## Remote Deployment
+
+The system is designed to complete installation over SSH, allowing you to monitor logs and debug from a working device. To deploy remotely:
+
+```bash
+./test-installer.sh -u --ip=192.168.1.100 --username=myuser --password=mypass
+```
+
+This approach offers several advantages:
+- Full installation logs are available on your working device
+- Real-time monitoring of the deployment process
+- Ability to debug issues without switching machines
+- Changes to deployment scripts can be made up until execution
+
+> **Note:** The `-u` flag replaces the deployment script on the target system with your current version. This means you can modify the deployment script right up until you execute it, as it's not baked into the ISO like other installation files.
+
+### Remote Deployment Process
+1. Boot the target machine from installation media
+2. Follow the instructions to complete the installation; reboot
+3. Decrypt the drive and wait for the system to reach the first TTY and obtain network connectivity. 
+> **Note:** Can get the device ip by logging in and running ```ip addr```
+4. Run the test-installer with appropriate connection details
+5. Monitor the installation progress from your working machine
