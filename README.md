@@ -2,16 +2,7 @@
 
 Custom Arch Linux installation with automated setup scripts and remote deployment tools.
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
-
-## Version Information
-
-This project follows [Semantic Versioning](https://semver.org/):
-- MAJOR version for incompatible API changes
-- MINOR version for backwards-compatible functionality additions
-- PATCH version for backwards-compatible bug fixes
-
-Current version: 0.1.0
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 
 ## Quick Start
 
