@@ -2,4 +2,4 @@
 /isoout/
 # Test VM artifacts
 .test-vm/
-vm_states/
+tree_*.txt

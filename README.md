@@ -2,6 +2,17 @@
 
 Custom Arch Linux installation with automated setup scripts and remote deployment tools.
 
+![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+
+## Version Information
+
+This project follows [Semantic Versioning](https://semver.org/):
+- MAJOR version for incompatible API changes
+- MINOR version for backwards-compatible functionality additions
+- PATCH version for backwards-compatible bug fixes
+
+Current version: 0.1.0
+
 ## Quick Start
 
 1. Build the installation ISO:
@@ -132,10 +143,11 @@ For detailed installation instructions, see [install/README.md](install/README.m
 - Installation: /tmp/install.log
 - Deployment: Remote system logs via SSH
 
-issues?
-decrypt the drive before running the ./test-installer.sh -u command
-use the correct ip address
-using the wrong drivers
-you want to use interactive mode but haven't renamed the preseed.conf file
-sometimes the install will fail for no apparent reason, run test-installer.sh -n to redo the vm . once you log in the first time run test-installer.sh -s to save the vm state
+### Issues
 
+- Decrypt the drive before running the `./test-installer.sh -u` command.
+- Use the correct IP address.
+- Ensure you are using the correct drivers.
+- If you want to use interactive mode, make sure to rename the `preseed.conf` file.
+- Sometimes the install will fail for no apparent reason and the VM won't bootstrap properly. Run `test-installer.sh -n` to redo the VM.
+- Once you log in the first time, run `test-installer.sh -s` to save the VM state.
