@@ -1,5 +1,2 @@
-/out/
-/isoout/
-# Test VM artifacts
-.test-vm/
-tree_*.txt
+tree*.txt
+archlinux*.iso
