@@ -136,3 +136,20 @@ This approach offers several advantages:
 > **Note:** Can get the device ip by logging in and running ```ip addr```
 4. Run the test-installer with appropriate connection details
 5. Monitor the installation progress from your working machine
+
+## Additional Deployment Files
+
+Any files placed in the `torun` folder will be automatically deployed alongside the deployment script. This allows you to:
+- Include additional scripts or configurations
+- Deploy custom themes or assets
+- Add post-installation utilities
+
+Current contents include:
+```bash
+torun/
+├── arch-linux-grub-theme.tar    # Custom GRUB theme
+├── grubthemer.sh               # GRUB theme installer
+└── pacmaneyecandy.sh          # Pacman configuration utilities
+```
+
+> **Note:** Files in the `torun` folder are deployed upon creation of the iso.
