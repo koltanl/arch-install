@@ -76,26 +76,26 @@ The development process follows these steps:
 
 1. Run the full test suite:
    ```bash
-   ./test-installer.sh
+   ./arch-deploy.sh
    ```
 
 2. If VM issues occur, rebuild using the `-n` flag:
    ```bash
-   ./test-installer.sh -n
+   ./arch-deploy.sh -n
    ```
 
 3. Once you reach the first TTY in the new Arch installation, save the VM state:
    ```bash
-   ./test-installer.sh -s
+   ./arch-deploy.sh -s
    ```
 
 4. Iterate on your deployment script using `-u` (deploy) and `-r` (restore) flags:
    ```bash
    # Deploy changes to test system
-   ./test-installer.sh -u
+   ./arch-deploy.sh -u
 
    # Restore to last saved state if needed
-   ./test-installer.sh -r
+   ./arch-deploy.sh -r
    ```
    This allows for rapid testing cycles without rebuilding from scratch.
 
@@ -118,7 +118,7 @@ The development process follows these steps:
 The system is designed to complete installation over SSH, allowing you to monitor logs and debug from a working device. To deploy remotely:
 
 ```bash
-./test-installer.sh -u --ip=192.168.1.100 --username=myuser --password=mypass
+./arch-deploy.sh -u --ip=192.168.1.100 --username=myuser --password=mypass
 ```
 
 This approach offers several advantages:

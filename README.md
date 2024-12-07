@@ -39,10 +39,10 @@ sudo dd bs=4M if=isoout/archlinux*.iso of=/dev/sdX status=progress oflag=sync
 # From your original machine (with the git repo)
 
 # Using default credentials from preseed.conf
-./test-installer.sh -u --ip=192.168.1.100
+./arch-deploy.sh -u --ip=192.168.1.100
 
 # Or specify custom credentials
-./test-installer.sh -u \
+./arch-deploy.sh -u \
     --ip=192.168.1.100 \
     --username=myuser \
     --password=mypass
@@ -76,31 +76,31 @@ sudo pacman -S virt-install libvirt
 sudo systemctl enable --now libvirtd
 
 # Full test with fresh ISO
-./test-installer.sh
+./arch-deploy.sh
 
 # Quick test with existing ISO
-./test-installer.sh --no-build
+./arch-deploy.sh --no-build
 ```
 
 ### Remote Deployment Options
 ```bash
 # Default IP (192.168.111.207) and preseed.conf credentials
-./test-installer.sh -u
+./arch-deploy.sh -u
 
 # Custom IP address
-./test-installer.sh -u --ip=192.168.1.100
+./arch-deploy.sh -u --ip=192.168.1.100
 
 # Custom credentials
-./test-installer.sh -u \
+./arch-deploy.sh -u \
     --ip=192.168.1.100 \
     --username=myuser \
     --password=mypass
 
 # Save VM state for testing
-./test-installer.sh --save
+./arch-deploy.sh --save
 
 # Restore VM state
-./test-installer.sh --restore
+./arch-deploy.sh --restore
 ```
 
 ### Network Configuration
@@ -138,12 +138,12 @@ For detailed installation instructions, see [install/README.md](install/README.m
 
 ### Issues
 
-- Decrypt the drive before running the `./test-installer.sh -u` command.
+- Decrypt the drive before running the `./arch-deploy.sh -u` command.
 - Use the correct IP address.
 - Ensure you are using the correct drivers.
 - If you want to use interactive mode, make sure to rename the `preseed.conf` file.
-- Sometimes the install will fail for no apparent reason and the VM won't bootstrap properly. Run `test-installer.sh -n` to redo the VM.
-- Once you log in the first time, run `test-installer.sh -s` to save the VM state.
+- Sometimes the install will fail for no apparent reason and the VM won't bootstrap properly. Run `arch-deploy.sh -n` to redo the VM.
+- Once you log in the first time, run `arch-deploy.sh -s` to save the VM state.
 - the preseed.conf is being read for the username and password; send those manually if didnt use -u --ip=x.x.x.x --username=x --password=x
 # Package Management
 
