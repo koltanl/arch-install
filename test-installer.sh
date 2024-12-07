@@ -13,7 +13,7 @@ DEBUG=0
 DEPLOYMENT_SCRIPT="install/deploymentArch.sh"
 REMOTE_DEPLOYMENT_PATH="/root/arch-install/install/deploymentArch.sh"
 SSH_TIMEOUT=300  # 5 minutes timeout for SSH connection attempts
-VM_IP="${VM_IP:-192.168.111.245}"  # Default IP, can be overridden
+VM_IP="${VM_IP:-192.168.111.113}"  # Default IP, can be overridden
 VM_NETWORK_NAME="arch-test-net"
 VM_NETWORK_ADDR="192.168.111.0/24"
 SSH_USER="${SSH_USER:-}"  # Will be set from preseed.conf if not provided
@@ -59,6 +59,44 @@ show_usage() {
     echo "  --restore|-r         Restore VM from saved state"
     echo "  --help|-h           Show this help message"
     exit 1
+}
+setup_network() {
+    echo "Setting up VM network..."
+    
+    # Remove existing network if it exists
+    sudo virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+    sudo virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+
+    # Create network XML
+    cat > /tmp/network.xml <<EOF
+<network>
+  <name>$VM_NETWORK_NAME</name>
+  <bridge name='virbr111'/>
+  <forward mode='nat'/>
+  <ip address='192.168.111.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.111.2' end='192.168.111.254'/>
+      <host mac='52:54:00:11:11:11' name='$VM_NAME' ip='$VM_IP'/>
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+    # Define and start the network
+    sudo virsh --connect qemu:///system net-define /tmp/network.xml || {
+        echo "Error: Failed to define network"
+        rm -f /tmp/network.xml
+        return 1
+    }
+    
+    sudo virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || {
+        echo "Error: Failed to start network"
+        rm -f /tmp/network.xml
+        return 1
+    }
+    
+    rm -f /tmp/network.xml
+    return 0
 }
 # Function to wait for VM creation
 wait_for_vm_creation() {
@@ -184,21 +222,38 @@ restore_vm_state() {
     local state_name="saved-state"
     echo "Restoring VM state..."
     
+    # Stop VM if running
+    if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
+        echo "Stopping VM for restore..."
+        virsh --connect qemu:///system destroy "$VM_NAME"
+        sleep 5  # Give more time for cleanup
+    fi
+    
+    # More aggressive SSH cleanup
+    echo "Cleaning up SSH known hosts..."
+    # Remove all entries for the VM IP
+    ssh-keygen -R "$VM_IP" 2>/dev/null || true
+    # Also remove entries by hostname
+    ssh-keygen -R "$VM_NAME" 2>/dev/null || true
+    # Remove entries from known_hosts2 if it exists
+    [ -f ~/.ssh/known_hosts2 ] && ssh-keygen -R "$VM_IP" -f ~/.ssh/known_hosts2 2>/dev/null || true
+    
+    # Clean up network state
+    echo "Cleaning up network state..."
+    sudo virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
+    sudo virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
+    
+    # Recreate network
+    echo "Recreating network..."
+    setup_network
+    
     # Get the disk path
     local disk_path=$(virsh --connect qemu:///system domblklist "$VM_NAME" | grep vda | awk '{print $2}')
     local backup_path="${disk_path}.${state_name}"
     
-    # Check if backup exists
     if [ ! -f "$backup_path" ]; then
         echo "Error: No saved state found at ${backup_path}"
         return 1
-    fi
-    
-    # Stop the VM if it's running
-    if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
-        echo "Stopping VM for restore..."
-        virsh --connect qemu:///system destroy "$VM_NAME"
-        sleep 2  # Give VM time to fully stop
     fi
     
     # Restore from backup
@@ -208,13 +263,50 @@ restore_vm_state() {
         return 1
     fi
     
-    # Start the VM
+    # Start the VM with a longer delay
     echo "Starting VM..."
-    if ! virsh --connect qemu:///system start "$VM_NAME"; then
-        echo "Warning: Failed to start VM - it may already be running"
+    virsh --connect qemu:///system start "$VM_NAME"
+    sleep 30  # Give VM more time to fully initialize
+    
+    # Verify network connectivity
+    echo "Verifying network connectivity..."
+    for i in {1..10}; do
+        if ping -c 1 -W 2 "$VM_IP" >/dev/null 2>&1; then
+            echo "Network connectivity established!"
+            return 0
+        fi
+        echo "Waiting for network... attempt $i/10"
+        sleep 5
+    done
+    
+    echo "Warning: Could not verify network connectivity"
+    return 1
+}
+
+verify_vm_state() {
+    echo "Verifying VM state..."
+    
+    # Check if VM is running
+    if ! virsh --connect qemu:///system domstate "$VM_NAME" | grep -q "running"; then
+        echo "VM is not running, attempting to start..."
+        virsh --connect qemu:///system start "$VM_NAME"
+        sleep 20  # Give VM time to boot
     fi
     
-    echo "VM state restored successfully"
+    # Verify network
+    echo "Checking network connectivity..."
+    if ! ping -c 1 -W 2 "$VM_IP" >/dev/null 2>&1; then
+        echo "Network appears down, recreating..."
+        setup_network
+        sleep 10
+    fi
+    
+    # Try to get VM IP
+    local actual_ip=$(virsh --connect qemu:///system net-dhcp-leases "$VM_NETWORK_NAME" | grep "$VM_NAME" | awk '{print $5}' | cut -d'/' -f1)
+    if [ -n "$actual_ip" ] && [ "$actual_ip" != "$VM_IP" ]; then
+        echo "Warning: VM has IP $actual_ip but we're trying to connect to $VM_IP"
+    fi
+    
     return 0
 }
 
@@ -314,6 +406,9 @@ wait_for_ssh() {
 
 update_deployment_script() {
     echo "Updating deployment script on VM..."
+    
+    # Verify VM state first
+    verify_vm_state
     
     # First copy to user's home
     if ! sshpass -p "$SSH_PASS" scp -o StrictHostKeyChecking=no "$DEPLOYMENT_SCRIPT" "${SSH_USER}@${VM_IP}:/home/${SSH_USER}/deploymentArch.sh"; then
@@ -453,64 +548,7 @@ virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
 virsh --connect qemu:///system undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
-setup_network() {
-    echo "Setting up VM network..."
-    
-    # Check if running as root, if not, use sudo
-    if [ "$EUID" -ne 0 ]; then
-        echo "Network setup requires root privileges..."
-        
-        # Remove existing network if it exists
-        sudo virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
-        sudo virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
 
-        # Create network XML
-        cat > /tmp/network.xml <<EOF
-<network>
-  <name>$VM_NETWORK_NAME</name>
-  <bridge name='virbr111'/>
-  <forward mode='nat'/>
-  <ip address='192.168.111.1' netmask='255.255.255.0'>
-    <dhcp>
-      <range start='192.168.111.2' end='192.168.111.254'/>
-      <host mac='52:54:00:11:11:11' name='$VM_NAME' ip='$VM_IP'/>
-    </dhcp>
-  </ip>
-</network>
-EOF
-
-        # Define and start the network with sudo
-        sudo virsh --connect qemu:///system net-define /tmp/network.xml || handle_error "Failed to define network"
-        sudo virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
-        rm /tmp/network.xml
-    else
-        # Original commands if already root
-        virsh --connect qemu:///system net-destroy "$VM_NETWORK_NAME" 2>/dev/null || true
-        virsh --connect qemu:///system net-undefine "$VM_NETWORK_NAME" 2>/dev/null || true
-
-        # Create network XML
-        cat > /tmp/network.xml <<EOF
-<network>
-  <name>$VM_NETWORK_NAME</name>
-  <bridge name='virbr111'/>
-  <forward mode='nat'/>
-  <ip address='192.168.111.1' netmask='255.255.255.0'>
-    <dhcp>
-      <range start='192.168.111.2' end='192.168.111.254'/>
-      <host mac='52:54:00:11:11:11' name='$VM_NAME' ip='$VM_IP'/>
-    </dhcp>
-  </ip>
-</network>
-EOF
-
-        virsh --connect qemu:///system net-define /tmp/network.xml || handle_error "Failed to define network"
-        virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || handle_error "Failed to start network"
-        rm /tmp/network.xml
-    fi
-}
-
-echo "Setting up VM network..."
-setup_network
 
 # Update virt-install command
 virt-install \

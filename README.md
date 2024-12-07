@@ -124,6 +124,7 @@ For detailed installation instructions, see [install/README.md](install/README.m
 - virt-install (for testing)
 - QEMU/KVM (for testing)
 
+
 ### Testing Changes
 1. Make script modifications
 2. Test in VM with test-installer.sh
@@ -142,7 +143,7 @@ For detailed installation instructions, see [install/README.md](install/README.m
 - If you want to use interactive mode, make sure to rename the `preseed.conf` file.
 - Sometimes the install will fail for no apparent reason and the VM won't bootstrap properly. Run `test-installer.sh -n` to redo the VM.
 - Once you log in the first time, run `test-installer.sh -s` to save the VM state.
-
+- the preseed.conf is being read for the username and password; send those manually if didnt use -u --ip=x.x.x.x --username=x --password=x
 # Package Management
 
 ## Package List Configuration

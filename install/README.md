@@ -129,3 +129,31 @@ cd /root/arch-install
 
 ### Logs
 Installation logs are available at `/tmp/preseed.log`
+
+### Development Workflow
+The development process follows these steps:
+
+1. Run the full test suite:
+   ```bash
+   ./test-installer.sh
+   ```
+
+2. If VM issues occur, rebuild using the `-n` flag:
+   ```bash
+   ./test-installer.sh -n
+   ```
+
+3. Once you reach the first TTY in the new Arch installation, save the VM state:
+   ```bash
+   ./test-installer.sh -s
+   ```
+
+4. Iterate on your deployment script using `-u` (deploy) and `-r` (restore) flags:
+   ```bash
+   # Deploy changes to test system
+   ./test-installer.sh -u
+
+   # Restore to last saved state if needed
+   ./test-installer.sh -r
+   ```
+   This allows for rapid testing cycles without rebuilding from scratch.

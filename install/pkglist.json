@@ -202,8 +202,6 @@
         "brother-mfc-l2730dw",
         "moar",
         "python-pynput",
-        "python-pysmb",
-        "steam",
-        "proton"
+        "python-pysmb"
     ]
 } 
