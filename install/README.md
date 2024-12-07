@@ -40,6 +40,53 @@ ROOT_PARTITION_SIZE=20  # Root partition size (GB)
 SWAP_SIZE=8            # Swap size (GB)
 ```
 
+### Package Management
+The system uses a JSON-based package configuration file:
+
+```bash
+install/pkglist.json    # Package list configuration
+```
+
+#### Package List Structure
+```json
+{
+    "interactive_packages": [
+        # Packages requiring user interaction during installation
+        # e.g., "plasma"
+    ],
+    "pacman_packages": [
+        # Official repository packages
+        # e.g., "firefox", "git"
+    ],
+    "aur_packages": [
+        # AUR packages
+        # e.g., "visual-studio-code-bin"
+    ]
+}
+```
+
+#### Customizing Interactive Package Installation
+For packages requiring custom interaction during installation:
+
+1. Add the package to the `interactive_packages` array in `pkglist.json`
+2. Modify the `install_packages` function in `deploymentArch.sh`:
+```bash
+if [ "$package" = "your_package" ]; then
+    # Handle your package's interactive installation
+    { echo "1"; echo "2"; } | sudo -S pacman -S --needed your_package
+fi
+```
+The example above sends "1" and "2" as responses to interactive prompts.
+
+#### Customizing Package Selection
+1. Edit `pkglist.json`
+2. Modify package lists in appropriate sections
+3. Run deployment script to apply changes:
+```bash
+cd /root/arch-install
+./install/deploymentArch.sh
+```
+
 ## Installation Process
 
 1. Base System (`preseedArch.sh`)
