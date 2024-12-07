@@ -740,6 +740,45 @@ secure_ssh() {
     fi
 }
 
+# Replace the existing run_torun_scripts function with this version
+run_torun_scripts() {
+    echo -e "${YELLOW}Running configuration scripts...${NC}"
+    
+    # First verify LAUNCHDIR exists and is accessible
+    if ! sudo test -d "$LAUNCHDIR"; then
+        if ! sudo mkdir -p "$LAUNCHDIR"; then
+            echo "ERROR: Failed to create launch directory"
+            return 1
+        fi
+    fi
+
+    # Check for torun directory
+    if ! sudo test -d "$LAUNCHDIR/torun"; then
+        echo "No torun directory found at $LAUNCHDIR/torun"
+        return 0
+    fi
+
+    # Use sudo to find and execute scripts
+    while IFS= read -r script; do
+        if [ -n "$script" ]; then
+            # Make script executable
+            if ! sudo chmod +x "$script"; then
+                echo "WARNING: Failed to make script executable: $script"
+                continue
+            fi
+            
+            echo -e "${YELLOW}Running $(basename "$script")...${NC}"
+            
+            # Run script with sudo bash
+            if ! sudo bash "$script"; then
+                echo "WARNING: Script $(basename "$script") failed but continuing..."
+            fi
+        fi
+    done < <(sudo find "$LAUNCHDIR/torun" -type f -name "*.sh" 2>/dev/null)
+    
+    return 0
+}
+
 # Main installation process
 main() {
     # Verify sudo access before proceeding
@@ -761,53 +800,22 @@ main() {
         echo -e "${YELLOW}Updating system...${NC}"
         sudo pacman -Syu --noconfirm || handle_error "System update failed"
     fi
- # Run all scripts in torun directory
-    echo -e "${YELLOW}Running additional configuration scripts...${NC}"
-    if [ -d "$LAUNCHDIR/torun" ]; then
-        echo "Found torun directory at $LAUNCHDIR/torun"
-        # First ensure all scripts are executable
-        find "$LAUNCHDIR/torun" -type f -name "*.sh" -exec chmod +x {} \;
-        
-        shopt -s nullglob  # Handle case of no .sh files
-        scripts=("$LAUNCHDIR/torun"/*.sh)
-        if [ ${#scripts[@]} -eq 0 ]; then
-            echo "No .sh scripts found in torun directory"
-            ls -la "$LAUNCHDIR/torun"  # Debug: show directory contents
-        else
-            echo "Found ${#scripts[@]} scripts to run"
-            for script in "${scripts[@]}"; do
-                if [ -f "$script" ]; then
-                    echo -e "${YELLOW}Running $(basename "$script")...${NC}"
-                    # Debug output
-                    echo "Script permissions: $(ls -l "$script")"
-                    echo "Script contents:"
-                    head -n 5 "$script"
-                    
-                    # Run with explicit bash and error handling
-                    if ! bash "$script"; then
-                        handle_error "Failed to run $(basename "$script")"
-                    fi
-                fi
-            done
-        fi
-    else
-        echo "No torun directory found at $LAUNCHDIR/torun"
-        # Debug: show parent directory contents
-        ls -la "$LAUNCHDIR"
-    fi
-    # Install core dependencies
-    install_yay || handle_error "Yay installation failed"
-    install_packages || handle_error "Package installation failed"
-    install_nnn || handle_error "NNN installation failed"
-    change_shell_to_zsh || handle_error "Shell change failed"
-    install_zplug || handle_error "Zplug installation failed"
-    install_oh_my_posh || handle_error "Oh-my-posh installation failed"
-    install_atuin || handle_error "Atuin installation failed"
-    setup_dotfiles || handle_error "Dotfiles setup failed"
-    setup_kitty || handle_error "Kitty setup failed"
-    setup_kde || handle_error "KDE setup failed"
-    setup_scripts || handle_error "Scripts setup failed"
-    setup_omp || handle_error "Oh-my-posh setup failed"
+
+
+# Run the torun scripts
+run_torun_scripts || handle_error "Torun scripts failed"
+install_yay || handle_error "Yay installation failed"
+install_packages || handle_error "Package installation failed"
+install_nnn || handle_error "NNN installation failed"
+change_shell_to_zsh || handle_error "Shell change failed"
+install_zplug || handle_error "Zplug installation failed"
+install_oh_my_posh || handle_error "Oh-my-posh installation failed"
+install_atuin || handle_error "Atuin installation failed"
+setup_dotfiles || handle_error "Dotfiles setup failed"
+setup_kitty || handle_error "Kitty setup failed"
+setup_kde || handle_error "KDE setup failed"
+setup_scripts || handle_error "Scripts setup failed"
+setup_omp || handle_error "Oh-my-posh setup failed"
 
    
     sudo systemctl enable sddm
