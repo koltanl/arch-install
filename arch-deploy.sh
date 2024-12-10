@@ -284,7 +284,7 @@ restore_vm_state() {
 }
 
 verify_vm_state() {
-    echo "Verifying VM state..."
+    echo "Verifying target state..."
     
     # Check if VM is running
     if ! virsh --connect qemu:///system domstate "$VM_NAME" | grep -q "running"; then
@@ -405,7 +405,7 @@ wait_for_ssh() {
 }
 
 update_deployment_script() {
-    echo "Updating deployment script on VM..."
+    echo "Updating deployment script on target..."
     
     # Verify VM state first
     verify_vm_state
