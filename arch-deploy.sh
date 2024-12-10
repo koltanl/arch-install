@@ -19,8 +19,13 @@ VM_NETWORK_ADDR="192.168.111.0/24"
 SSH_USER="${SSH_USER:-}"  # Will be set from preseed.conf if not provided
 SSH_PASS="${SSH_PASS:-}"  # Will be set from preseed.conf if not provided
 
-# Source credentials from preseed.conf
-if [ -f "$PRESEED_CONF" ]; then
+# Move preseed loading into a function
+load_preseed_config() {
+    if [ ! -f "$PRESEED_CONF" ]; then
+        echo "Error: preseed.conf not found at $PRESEED_CONF"
+        exit 1
+    fi
+
     # Use grep and cut to extract values, with error checking
     ROOT_PASSWORD=$(grep "^ROOT_PASSWORD=" "$PRESEED_CONF" | cut -d'"' -f2)
     USERNAME=$(grep "^USERNAME=" "$PRESEED_CONF" | cut -d'"' -f2)
@@ -38,14 +43,11 @@ if [ -f "$PRESEED_CONF" ]; then
         echo "Error: Could not extract USER_PASSWORD from preseed.conf"
         exit 1
     fi
-else
-    echo "Error: preseed.conf not found at $PRESEED_CONF"
-    exit 1
-fi
 
-# Now define variables that depend on preseed values
-SSH_USER="$USERNAME"
-SSH_PASS="$USER_PASSWORD"
+    # Set SSH credentials from preseed values
+    SSH_USER="$USERNAME"
+    SSH_PASS="$USER_PASSWORD"
+}
 
 # Function to show usage
 show_usage() {
@@ -58,6 +60,7 @@ show_usage() {
     echo "  --save|-s            Save current VM state"
     echo "  --restore|-r         Restore VM from saved state"
     echo "  --help|-h           Show this help message"
+    echo "  --automated|-a      Automated install"
     exit 1
 }
 setup_network() {
@@ -71,7 +74,7 @@ setup_network() {
     cat > /tmp/network.xml <<EOF
 <network>
   <name>$VM_NETWORK_NAME</name>
-  <bridge name='virbr111'/>
+  <bridge name='virbr111' stp='on' delay='0'/>
   <forward mode='nat'/>
   <ip address='192.168.111.1' netmask='255.255.255.0'>
     <dhcp>
@@ -83,20 +86,32 @@ setup_network() {
 EOF
 
     # Define and start the network
-    sudo virsh --connect qemu:///system net-define /tmp/network.xml || {
+    if ! sudo virsh --connect qemu:///system net-define /tmp/network.xml; then
         echo "Error: Failed to define network"
         rm -f /tmp/network.xml
         return 1
-    }
+    fi
     
-    sudo virsh --connect qemu:///system net-start "$VM_NETWORK_NAME" || {
+
+    if ! sudo virsh --connect qemu:///system net-start "$VM_NETWORK_NAME"; then
         echo "Error: Failed to start network"
         rm -f /tmp/network.xml
         return 1
-    }
+    fi
     
+    # Verify bridge device exists
+    for i in {1..5}; do
+        if ip link show virbr111 >/dev/null 2>&1; then
+            echo "Network bridge virbr111 is ready"
+            rm -f /tmp/network.xml
+            return 0
+        fi
+        echo "Waiting for bridge device to be ready... attempt $i/5"
+    done
+    
+    echo "Error: Bridge device virbr111 not found after waiting"
     rm -f /tmp/network.xml
-    return 0
+    return 1
 }
 # Function to wait for VM creation
 wait_for_vm_creation() {
@@ -141,7 +156,6 @@ cleanup() {
             if [ "$state" != "shut off" ]; then
                 echo "Shutting down VM..."
                 sudo virsh --connect qemu:///system shutdown "$VM_NAME" 2>/dev/null || true
-                sleep 2
                 # Force destroy if shutdown didn't work
                 sudo virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
             fi
@@ -174,9 +188,6 @@ cleanup() {
     echo "Cleaning up lock and NVRAM files..."
     sudo rm -f "/var/lib/libvirt/qemu/domain-${VM_NAME}-*/master-key.aes" 2>/dev/null || true
     sudo rm -f "/var/lib/libvirt/qemu/nvram/${VM_NAME}_VARS.fd" 2>/dev/null || true
-    
-    # Wait for resources to be released
-    sleep 3
     
     echo "Cleanup completed"
 }
@@ -226,7 +237,6 @@ restore_vm_state() {
     if virsh --connect qemu:///system domstate "$VM_NAME" 2>/dev/null | grep -q "running"; then
         echo "Stopping VM for restore..."
         virsh --connect qemu:///system destroy "$VM_NAME"
-        sleep 5  # Give more time for cleanup
     fi
     
     # More aggressive SSH cleanup
@@ -266,7 +276,6 @@ restore_vm_state() {
     # Start the VM with a longer delay
     echo "Starting VM..."
     virsh --connect qemu:///system start "$VM_NAME"
-    sleep 30  # Give VM more time to fully initialize
     
     # Verify network connectivity
     echo "Verifying network connectivity..."
@@ -276,7 +285,6 @@ restore_vm_state() {
             return 0
         fi
         echo "Waiting for network... attempt $i/10"
-        sleep 5
     done
     
     echo "Warning: Could not verify network connectivity"
@@ -316,6 +324,9 @@ UPDATE_DEPLOY=false
 SAVE_STATE=false
 RESTORE=false
 FRESH_START=false
+SHOW_HELP=false
+AUTOMATED=false
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --no-build|-n)
@@ -344,7 +355,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            show_usage
+            SHOW_HELP=true
+            shift
             ;;
         --ip=*)
             VM_IP="${1#*=}"
@@ -358,12 +370,27 @@ while [[ $# -gt 0 ]]; do
             SSH_PASS="${1#*=}"
             shift
             ;;
+        --automated|-a)
+            AUTOMATED=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             show_usage
             ;;
     esac
 done
+
+# Check for help after argument parsing
+if [ "$SHOW_HELP" = true ]; then
+    show_usage
+    exit 0
+fi
+
+# Only load preseed if doing automated install
+if [ "$AUTOMATED" = true ]; then
+    load_preseed_config
+fi
 
 # Add this near the start of the main execution flow
 if [ "$FRESH_START" = true ]; then
@@ -543,12 +570,18 @@ fi
 echo "Setting up fresh VM environment..."
 cleanup  # Call cleanup before starting to ensure clean slate
 
+# Setup network before creating VM
+echo "Setting up VM network..."
+if ! setup_network; then
+    handle_error "Failed to setup VM network"
+fi
+
+
 # Remove existing VM if it exists
 virsh --connect qemu:///system destroy "$VM_NAME" 2>/dev/null || true
 virsh --connect qemu:///system undefine "$VM_NAME" --remove-all-storage 2>/dev/null || true
 
 echo "Creating new VM..."
-
 
 # Update virt-install command
 virt-install \
@@ -574,7 +607,7 @@ VM '$VM_NAME' has been created and is booting from the test ISO.
 The VM is configured with:
 - 4GB RAM
 - 2 CPU cores
-- 20GB disk
+- 40GB disk
 - UEFI boot
 - SPICE display
 

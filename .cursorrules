@@ -1,0 +1,70 @@
+# Cursor Rules - Shared Notation Reference
+
+# Strategic Planning
+%plan - Generate strategic breakdown of approach before implementation
+Example: "%plan automated backup system"
+Outputs:
+   1. Objective statement
+   2. Key considerations
+   3. Implementation phases
+   4. Success criteria
+
+# Plan Then Execute Pattern
+%p2x - Two-phase response: planning followed by execution
+Example: "%p2x implement zero-trust network"
+Phases:
+  Phase 1: Strategic plan (.plan)
+  Phase 2: Implementation steps (.exec)
+
+# Decision Trees and Matrices
+%dt, %decisiontree - Generate a decision tree matrix showing paths and outcomes
+Example: "%dt user authentication flows"
+
+# Grid Layouts
+%grid - Create a formatted grid/table structure
+Example: "%grid compare deployment options"
+
+# Architecture Diagrams
+%arch - Generate system architecture diagram in ASCII
+Example: "%arch microservice layout"
+
+# Process Flows
+%flow - Create a process flow in ASCII
+Example: "%flow CI/CD pipeline"
+
+# Checklists
+%check - Generate a checklist format
+Example: "%check deployment prerequisites"
+
+# State Machines
+%state - State machine diagram in ASCII
+Example: "%state container lifecycle"
+
+# Directory Trees
+%tree - Directory/file tree structure
+Example: "%tree project layout"
+
+# Sequence Diagrams
+%seq - Sequence diagram in ASCII
+Example: "%seq authentication flow"
+
+# Output Modifiers
+.txt   - Plain text output
+.md    - Markdown formatted
+.ascii - ASCII art version
+.min   - Minimal/condensed version
+
+# Visual Interpretation
+%read - Interpret and describe visual content
+Example: "%read screenshot" or "%read diagram"
+Outputs:
+   1. Content summary
+   2. Key details
+   3. Relevant text/code
+   4. Context interpretation
+
+# Combining Operators
+Use && to chain multiple operations
+Example: "%read && %plan" - First interpret visual content, then create strategic plan
+Example: "%read && %p2x" - Analyze visual input, plan approach, then execute
+Example: "%dt && %flow" - Generate decision tree followed by process flow

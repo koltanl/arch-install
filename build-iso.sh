@@ -94,7 +94,7 @@ if ! sudo mkarchiso -v -w ${work_dir} -o ${out_dir} ${work_dir}; then
 fi
 
 # Verify the ISO was created successfully
-if [ ! -f "${out_dir}/archlinux-"*".iso" ]; then
+if [ -z "$(find "${out_dir}" -name 'archlinux-*.iso' -type f)" ]; then
     echo "Error: ISO file not found after build"
     sudo rm -rf ${work_dir}
     exit 1
