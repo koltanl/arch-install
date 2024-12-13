@@ -514,6 +514,22 @@ setup_services() {
         fi
     done
 
+    # Secure SSH configuration
+    echo -e "${YELLOW}Securing SSH configuration...${NC}"
+    local sshd_config="/etc/ssh/sshd_config"
+    
+    if [ -f "$sshd_config" ]; then
+        # Disable password authentication
+        sudo sed -i 's/^#\?PasswordAuthentication yes/PasswordAuthentication no/' "$sshd_config"
+        # Disable root login
+        sudo sed -i 's/^#\?PermitRootLogin yes/PermitRootLogin prohibit-password/' "$sshd_config"
+       
+        # Restart SSH service if it's running
+        if systemctl is-active sshd &>/dev/null; then
+            sudo systemctl restart sshd
+        fi
+    fi
+
     echo -e "${GREEN}System services setup completed${NC}"
     return 0
 }

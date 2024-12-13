@@ -32,20 +32,26 @@ sudo dd bs=4M if=isoout/archlinux*.iso of=/dev/sdX status=progress oflag=sync
 - Boot from the USB drive
 - Follow the installation prompts
 - After installation completes, reboot into your new system
-- Log in and run `ip a` to find your new system's IP address
 
-4. Complete Setup Remotely:
+4. Complete Setup (Choose one method):
+
+A. Remote Deployment (Recommended for debugging):
 ```bash
-# From your original machine (with the git repo)
-
-# Using default credentials from preseed.conf
+# From your original machine
 ./arch-deploy.sh -u --ip=192.168.1.100
-
 # Or specify custom credentials
 ./arch-deploy.sh -u \
     --ip=192.168.1.100 \
     --username=myuser \
     --password=mypass
+```
+
+B. Manual Deployment (Alternative method):
+```bash
+# From your new Arch installation
+git clone https://github.com/koltanl/arch-install.git
+cd arch-install
+./manualdeployment.sh
 ```
 
 The remote deployment will:
