@@ -593,6 +593,42 @@ run_torun_scripts() {
     return 0
 }
 
+setup_scripts() {
+    echo -e "${YELLOW}Setting up utility scripts...${NC}"
+    
+    # Create bin directory if it doesn't exist
+    local bin_dir="$HOME/bin"
+    mkdir -p "$bin_dir"
+    mkdir -p "$bin_dir/utils"
+
+    # Look for scripts in script directory
+    local scripts_dir="$SCRIPT_DIR/scripts"
+    if [ ! -d "$scripts_dir" ]; then
+        echo -e "${YELLOW}No scripts directory found at $scripts_dir${NC}"
+        return 0
+    fi
+
+    echo "Copying scripts from $scripts_dir to $bin_dir"
+
+    # Copy root level scripts
+    find "$scripts_dir" -maxdepth 1 -type f \( -name "*.sh" -o -name "*.py" \) -exec cp {} "$bin_dir/" \;
+
+    # Copy utils subdirectory if it exists
+    if [ -d "$scripts_dir/utils" ]; then
+        echo "Copying utility scripts..."
+        find "$scripts_dir/utils" -type f \( -name "*.sh" -o -name "*.py" \) -exec cp {} "$bin_dir/utils/" \;
+    fi
+
+    # Make all scripts executable
+    find "$bin_dir" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} \;
+
+    # Fix ownership
+    chown -R "$USER:$USER" "$bin_dir"
+
+    echo -e "${GREEN}Scripts setup completed${NC}"
+    return 0
+}
+
 # Error handling function
 handle_error() {
     echo -e "${RED}Error: $1${NC}" >&2
@@ -604,7 +640,7 @@ main() {
     echo -e "${GREEN}Starting manual deployment...${NC}"
     
     # Total steps for progress bar
-    local total_steps=9
+    local total_steps=10
     local current_step=0
     
     # Check if running as root
@@ -633,6 +669,9 @@ main() {
     progress $((++current_step)) $total_steps
     
     install_shell_tools
+    progress $((++current_step)) $total_steps
+    
+    setup_scripts
     progress $((++current_step)) $total_steps
     
     run_torun_scripts
