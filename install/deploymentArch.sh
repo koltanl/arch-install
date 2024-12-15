@@ -670,6 +670,31 @@ install_nnn() {
         echo "Error: Failed to install nnn"
         return 1
     fi
+
+    # Setup nnn plugins
+    echo "Setting up nnn plugins..."
+    local plugins_dir="$REAL_HOME/.config/nnn/plugins"
+    mkdir -p "$plugins_dir"
+    sudo_run chown "$REAL_USER:$REAL_USER" "$plugins_dir"
+
+    # Clone plugins repository
+    echo "Cloning nnn plugins repository..."
+    if ! git clone --depth 1 https://github.com/jarun/nnn.git "$BUILD_DIR/nnn-plugins"; then
+        echo -e "${RED}Warning: Failed to clone nnn plugins repository${NC}"
+    else
+        # Copy plugins to user directory
+        echo "Copying plugins to $plugins_dir..."
+        cp -r "$BUILD_DIR/nnn-plugins/plugins/"* "$plugins_dir/" || {
+            echo -e "${RED}Warning: Failed to copy nnn plugins${NC}"
+        }
+        
+        # Make all plugins executable and fix ownership
+        echo "Setting plugin permissions..."
+        chmod +x "$plugins_dir"/* || {
+            echo -e "${RED}Warning: Failed to make plugins executable${NC}"
+        }
+        sudo_run chown -R "$REAL_USER:$REAL_USER" "$plugins_dir"
+    fi
     
     return 0
 }

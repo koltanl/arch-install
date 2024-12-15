@@ -458,6 +458,26 @@ install_shell_tools() {
         return 1
     fi
 
+    # Setup nnn plugins
+    echo "Setting up nnn plugins..."
+    local plugins_dir="$HOME/.config/nnn/plugins"
+    mkdir -p "$plugins_dir"
+
+    # Clone plugins repository
+    if ! git clone --depth 1 https://github.com/jarun/nnn.git "$build_dir/nnn-plugins"; then
+        echo -e "${RED}Warning: Failed to clone nnn plugins repository${NC}"
+    else
+        # Copy plugins to user directory
+        cp -r "$build_dir/nnn-plugins/plugins/"* "$plugins_dir/" || {
+            echo -e "${RED}Warning: Failed to copy nnn plugins${NC}"
+        }
+        
+        # Make all plugins executable
+        chmod +x "$plugins_dir"/* || {
+            echo -e "${RED}Warning: Failed to make plugins executable${NC}"
+        }
+    fi
+
     cd "$SCRIPT_DIR"
     rm -rf "$build_dir"
 
