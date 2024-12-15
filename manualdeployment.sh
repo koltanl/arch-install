@@ -563,6 +563,10 @@ run_torun_scripts() {
         return 0
     fi
 
+    # Store current user info
+    local CURRENT_USER="$USER"
+    local CURRENT_HOME="$HOME"
+
     # Find and execute all .sh scripts in torun directory
     while IFS= read -r script; do
         if [ -n "$script" ]; then
@@ -574,12 +578,17 @@ run_torun_scripts() {
                 continue
             }
             
-            # Run script with sudo bash
-            if ! sudo bash "$script"; then
+            # Run script with sudo bash, preserving original user environment
+            if ! sudo -E bash -c "export HOME='$CURRENT_HOME' USER='$CURRENT_USER' LOGNAME='$CURRENT_USER'; bash '$script'"; then
                 echo -e "${RED}Warning: Script $(basename "$script") failed but continuing...${NC}"
             fi
         fi
     done < <(find "$torun_dir" -type f -name "*.sh" 2>/dev/null)
+    
+    # Ensure any files created during script execution are owned by the original user
+    if [ -d "$torun_dir" ]; then
+        sudo chown -R "$CURRENT_USER:$CURRENT_USER" "$torun_dir" 2>/dev/null || true
+    fi
     
     return 0
 }
