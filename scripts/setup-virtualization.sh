@@ -29,24 +29,86 @@ enable_multilib() {
     fi
 }
 
+# Function to check and handle iptables
+handle_iptables() {
+    echo -e "${YELLOW}Checking iptables configuration...${NC}"
+    
+    # Check if iptables is required by other packages
+    if pacman -Qi iptables >/dev/null 2>&1; then
+        DEPS=$(pacman -Qii iptables | grep "Required By" | cut -d: -f2-)
+        if [ -n "$DEPS" ] && [ "$DEPS" != "None" ]; then
+            echo -e "${YELLOW}Warning: Cannot replace iptables with iptables-nft as it is required by other packages:${NC}"
+            echo "$DEPS"
+            echo -e "${YELLOW}Continuing with traditional iptables...${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}Removing traditional iptables...${NC}"
+            pacman -R --noconfirm iptables || return 1
+        fi
+    fi
+    
+    # Install iptables-nft if iptables was successfully removed or wasn't installed
+    if ! pacman -Qi iptables >/dev/null 2>&1; then
+        echo -e "${YELLOW}Installing iptables-nft...${NC}"
+        pacman -S --noconfirm iptables-nft || return 1
+    fi
+}
+
 # Function to install dependencies
 install_dependencies() {
     echo -e "${YELLOW}Installing virtualization dependencies...${NC}"
     
-    # Core virtualization packages
-    pacman -S --needed --noconfirm \
-        qemu-full \
-        libvirt \
-        virt-manager \
-        dnsmasq \
-        iptables-nft
+    # Handle iptables first
+    handle_iptables || {
+        echo -e "${RED}Failed to configure iptables${NC}"
+        return 1
+    }
+    
+    # Core virtualization packages (excluding iptables-nft as it's handled separately)
+    for pkg in qemu-full libvirt virt-manager dnsmasq; do
+        echo -e "${YELLOW}Installing $pkg...${NC}"
+        pacman -S --needed --noconfirm "$pkg" || {
+            echo -e "${RED}Failed to install $pkg${NC}"
+            return 1
+        }
+    done
         
     # Optional but recommended packages
-    pacman -S --needed --noconfirm \
-        bridge-utils \
-        openbsd-netcat \
-        vde2 \
-        ebtables
+    for pkg in bridge-utils openbsd-netcat vde2 ebtables; do
+        echo -e "${YELLOW}Installing optional package $pkg...${NC}"
+        pacman -S --needed --noconfirm "$pkg" || {
+            echo -e "${YELLOW}Warning: Failed to install optional package $pkg${NC}"
+        }
+    done
+}
+
+# Update verify_installation to handle either iptables or iptables-nft
+verify_installation() {
+    echo -e "${YELLOW}Verifying installation...${NC}"
+    
+    # Check if critical packages are installed
+    local required_pkgs=(qemu-full libvirt virt-manager dnsmasq)
+    local missing_pkgs=()
+    
+    # Check for either iptables or iptables-nft
+    if ! (pacman -Qi iptables >/dev/null 2>&1 || pacman -Qi iptables-nft >/dev/null 2>&1); then
+        missing_pkgs+=("iptables/iptables-nft")
+    fi
+    
+    for pkg in "${required_pkgs[@]}"; do
+        if ! pacman -Qi "$pkg" >/dev/null 2>&1; then
+            missing_pkgs+=("$pkg")
+        fi
+    done
+    
+    if [ ${#missing_pkgs[@]} -ne 0 ]; then
+        echo -e "${RED}Error: The following required packages are not installed:${NC}"
+        printf '%s\n' "${missing_pkgs[@]}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}All required packages are installed${NC}"
+    return 0
 }
 
 # Function to configure system
@@ -123,7 +185,14 @@ setup_storage() {
 main() {
     check_root
     enable_multilib
-    install_dependencies
+    install_dependencies || {
+        echo -e "${RED}Failed to install dependencies${NC}"
+        exit 1
+    }
+    verify_installation || {
+        echo -e "${RED}Installation verification failed${NC}"
+        exit 1
+    }
     configure_system
     setup_cpu_features
     configure_spice
