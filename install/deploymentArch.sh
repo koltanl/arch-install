@@ -156,19 +156,6 @@ install_yay() {
     return 0
 }
 
-# Function to install zplug if not present
-install_zplug() {
-    if [ "$TEST_MODE" = true ]; then
-        echo -e "${YELLOW}TEST MODE: Would install zplug to $REAL_HOME/.zplug${NC}"
-        return 0
-    fi
-
-    if [ ! -d "$REAL_HOME/.zplug" ]; then
-        echo -e "${YELLOW}Installing zplug...${NC}"
-        sudo -u "$REAL_USER" git clone https://github.com/zplug/zplug "$REAL_HOME/.zplug"
-    fi
-}
-
 # Function to install packages from pkglist.json
 install_packages() {
     echo -e "${YELLOW}Installing packages from pkglist.json...${NC}"
@@ -804,6 +791,54 @@ run_torun_scripts() {
     return 0
 }
 
+# Add new function to install zsh plugins
+install_zsh_plugins() {
+    echo -e "${YELLOW}Installing zsh plugins...${NC}"
+    
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${YELLOW}TEST MODE: Would install zsh plugins${NC}"
+        return 0
+    fi
+
+    # Create plugin directories
+    local plugin_dir="/usr/share/zsh/plugins"
+    if ! sudo_run mkdir -p "$plugin_dir"; then
+        handle_error "Failed to create plugin directory"
+        return 1
+    fi
+
+    # Install zsh-autosuggestions
+    if [ ! -d "$plugin_dir/zsh-autosuggestions" ]; then
+        echo "Installing zsh-autosuggestions..."
+        if ! sudo_run git clone https://github.com/zsh-users/zsh-autosuggestions.git "$plugin_dir/zsh-autosuggestions"; then
+            handle_error "Failed to install zsh-autosuggestions"
+            return 1
+        fi
+    fi
+
+    # Install zsh-syntax-highlighting
+    if [ ! -d "$plugin_dir/zsh-syntax-highlighting" ]; then
+        echo "Installing zsh-syntax-highlighting..."
+        if ! sudo_run git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$plugin_dir/zsh-syntax-highlighting"; then
+            handle_error "Failed to install zsh-syntax-highlighting"
+            return 1
+        fi
+    fi
+
+    # Install fzf if not already installed
+    if ! command_exists fzf; then
+        echo "Installing fzf..."
+        if ! sudo_run pacman -S --noconfirm fzf; then
+            handle_error "Failed to install fzf"
+            return 1
+        fi
+    fi
+
+    # Set permissions
+    sudo_run chmod -R 755 "$plugin_dir"
+    return 0
+}
+
 # Main installation process
 main() {
     # Verify sudo access before proceeding
@@ -833,7 +868,7 @@ install_yay || handle_error "Yay installation failed"
 install_packages || handle_error "Package installation failed"
 install_nnn || handle_error "NNN installation failed"
 change_shell_to_zsh || handle_error "Shell change failed"
-install_zplug || handle_error "Zplug installation failed"
+install_zsh_plugins || handle_error "Zsh plugins installation failed"
 install_oh_my_posh || handle_error "Oh-my-posh installation failed"
 install_atuin || handle_error "Atuin installation failed"
 setup_dotfiles || handle_error "Dotfiles setup failed"

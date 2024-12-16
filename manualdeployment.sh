@@ -403,14 +403,43 @@ install_shell_tools() {
         fi
     fi
 
-    # Install zplug
-    if [ ! -d "$HOME/.zplug" ]; then
-        echo "Installing zplug..."
-        git clone https://github.com/zplug/zplug "$HOME/.zplug" || {
-            handle_error "Failed to install zplug"
-            return 1
-        }
+    # Install zsh plugins
+    echo "Installing zsh plugins..."
+    local plugin_dir="/usr/share/zsh/plugins"
+    if ! sudo mkdir -p "$plugin_dir"; then
+        handle_error "Failed to create plugin directory"
+        return 1
     fi
+
+    # Install zsh-autosuggestions
+    if [ ! -d "$plugin_dir/zsh-autosuggestions" ]; then
+        echo "Installing zsh-autosuggestions..."
+        if ! sudo git clone https://github.com/zsh-users/zsh-autosuggestions.git "$plugin_dir/zsh-autosuggestions"; then
+            handle_error "Failed to install zsh-autosuggestions"
+            return 1
+        fi
+    fi
+
+    # Install zsh-syntax-highlighting
+    if [ ! -d "$plugin_dir/zsh-syntax-highlighting" ]; then
+        echo "Installing zsh-syntax-highlighting..."
+        if ! sudo git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$plugin_dir/zsh-syntax-highlighting"; then
+            handle_error "Failed to install zsh-syntax-highlighting"
+            return 1
+        fi
+    fi
+
+    # Install fzf
+    if ! command_exists fzf; then
+        echo "Installing fzf..."
+        if ! sudo pacman -S --needed --noconfirm fzf; then
+            handle_error "Failed to install fzf"
+            return 1
+        fi
+    fi
+
+    # Set permissions for plugins
+    sudo chmod -R 755 "$plugin_dir"
 
     # Install oh-my-posh
     if ! command_exists oh-my-posh; then

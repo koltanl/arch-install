@@ -22,7 +22,6 @@ fi
 
 export LOCAL_IP=$(ip route get 1 | awk '{print $7}')
 export PATH="$HOME/bin:$HOME/.local/bin:/sbin:/usr/sbin:/opt/android-studio/bin:/usr/local/sbin:$PATH"
-export ZPLUG_HOME="$HOME/.zplug"
 # Check for 'moar' first; if not found, check for 'less'; if neither, default to 'more'
 if command -v moar &> /dev/null; then
     alias moar="moar -colors auto -wrap -mousemode auto"
@@ -38,23 +37,23 @@ fi
 #############################################
 # Plugins
 #############################################
-# Source zplug
 
-if [[ -d "${ZPLUG_HOME}" ]]; then
-    source $ZPLUG_HOME/init.zsh
+# Load autosuggestions
+source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 
-    # Define plugins
-    zplug "zsh-users/zsh-autosuggestions"
-    zplug "zsh-users/zsh-syntax-highlighting", defer:2
-    zplug "zsh-users/zsh-completions", defer:3
-    zplug "junegunn/fzf", from:github, as:plugin, use:"shell/*.zsh", defer:2
+# Load syntax highlighting
+source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
-    # Load plugins
-    zplug load
+# Configure autosuggestions
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'  # Adjust this number for visibility
 
-else
-    echo "zplug is not installed. Please run the install script."
-fi
+# Load fzf
+source /usr/share/fzf/key-bindings.zsh
+source /usr/share/fzf/completion.zsh
+
+# Configure highlighting
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets pattern cursor)
 
 #############################################
 #EXPORTS
@@ -79,15 +78,16 @@ export NNN_TERMINAL=kitty
 
 # Define LS_COLORS if not already set
 if [ -z "$LS_COLORS" ]; then
-    # Example LS_COLORS definitions
-    LS_COLORS='di=1;34:ln=1;36:so=1;35:pi=1;33:ex=1;32:bd=1;34;46:cd=1;34;46:su=0;41:sg=0;46:tw=0;42:ow=0;43:'
+    # Modified LS_COLORS definitions
+    # di=directory, ow=other-writable
+    LS_COLORS='di=1;34:ln=1;36:so=1;35:pi=1;31:ex=1;32:bd=1;34;46:cd=1;34;46:su=0;41:sg=0;46:tw=0;34:ow=1;34:'
     export LS_COLORS
 fi
 
 # Colors
 user_color="%F{green}"
 location_color="%F{cyan}" 
-hostname_color="%F{yellow}" 
+hostname_color="%F{blue}"
 # Construct the prompt with dynamic hostname coloring
 PROMPT="${user_color}%n%f@${hostname_color}%m ${location_color}%~%f -> "
 
@@ -140,7 +140,7 @@ zstyle ':completion:*:approximate:*' max-errors 'reply=(reply=( $(( ($#PREFIX+$#
 zstyle ':completion:*' list-prompt '%SAt %p: Hit TAB for more, or the character to insert%s'
 zstyle ':completion:*' select-prompt '%SScrolling active: current selection at %p%s'
 zstyle ':completion:*:descriptions' format '%F{cyan}%B%d%b%f'
-zstyle ':completion:*:messages' format '%F{yellow}%d%f'
+zstyle ':completion:*:messages' format '%F{blue}%d%f'
 zstyle ':completion:*:warnings' format '%F{red}No matches for: %d%f'
 zstyle ':completion:*:corrections' format '%B%d (errors: %e)%b'
 

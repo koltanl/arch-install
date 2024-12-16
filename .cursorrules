@@ -1,15 +1,99 @@
-Below is a series of commands the user may invoke to help both of us more effectively iterate on the code.
-%plan - plan changes to be made before making them analyzing the code and any other relevant information
-%proceed - make the changes in accordance with the plan
-%explain - explain the changes made and why they were made
-%test - suggest test cases or scenarios to verify the changes
-%optimize - suggest potential optimizations for the current code
-%debug - help identify and fix potential issues in the code
-%txt - ensure output is purely in plain text
-%md - ensure output is in markdown format
+## Commands the user may invoke (user only)
+| Command | Description |
+|---------|-------------|
+| `%plan` | Plan changes to be made before making them analyzing the code and any other relevant information |
+| `%proceed` | Make the changes in accordance with the plan |
+| `%explain` | Explain the changes made and why they were made |
+| `%test` | Suggest test cases or scenarios to verify the changes |
+| `%optimize` | Suggest potential optimizations for the current code |
+| `%debug` | Help identify and fix potential issues in the code |
+| `%txt` | Ensure output is purely in plain text |
+| `%md` | Ensure output is in markdown format |
+
+| Combined Commands | Description |
+|------------------|-------------|
+| `%plan && %optimize` | User is looking for broader changes to be performed on the codebase; such as refactoring or restructuring, breaking down complex functions, etc. |
+| `%plan && %proceed` | User is looking for a more detailed plan of action to be performed on the codebase in response to user desired feature or request; after deliberating on the plan, go ahead and make the changes. |
+| `%debug && %test` | User is looking for aid in adding debug statements or test cases to solve issues |
 
 
-combination of commands can be sequenced:
-%plan && %optimize -- user is looking for broader changes to be performed on the codebase; such as refactoring or restructuring, breaking down complex functions, etc.
-%plan && %proceed -- user is looking for a more detailed plan of action to be performed on the codebase in response to user desired feature or request; after deliberating on the plan, go ahead and make the changes. 
-%debug && %test -- user is looking for aid in adding debug statements or test cases to solve issues
+<Response Format Specification>
+<template>
+<!-- Analysis Section -->
+<analysis>
+<requirements>
+[Detailed interpretation of user requirements]
+- Demonstrate clear understanding of the user's request and unstated needs
+- 2-4 sentences maximum
+</requirements>
+<methodology>
+[Step-by-step reasoning and approach]
+- Start with problem decomposition
+- Include decision points and their rationale
+</methodology>
+</analysis>
+
+<!-- Implementation Section -->
+<implementation>
+[Code or solution implementation]
+- Maximum 100 lines of code per implementation block
+- Break larger implementations into multiple steps
+- Tell the user that they can continue the implementation in the next prompt if our maximum is reached
+</implementation>
+
+<!-- Evaluation Section -->
+<evaluation>
+<alternatives>
+[Optional: Alternative approaches and considerations]
+</alternatives>
+<risks>
+[Optional: Potential issues and mitigation strategies]
+</risks>
+<recommendations>
+[Optional: Final recommendations and conclusions]
+- Provide the user a conclusion statement
+- Provide a summary of the changes made
+- If a change requires multiple steps, provide a summary of the steps, what we did, and what's immediately next
+</recommendations>
+</evaluation>
+</template>
+
+
+## Command Output Format:
+1. Each command must be provided on a separate line, except installation commands, which can be bundled together
+2. Commands should be provided without any accompanying text or comments
+3. Format: 
+    1. [instructions]
+        ```
+        [command]
+        ```
+    2. [instructions]
+        ```
+        [command]
+        ```
+4. Example Workflow:
+    1. Install Required Dependencies:
+        ```
+        sudo pacman -S qemu-full virt-manager libvirt ebtables dnsmasq
+        ```
+
+    2. Configure System Services:
+        ```
+        sudo systemctl enable libvirtd
+        sudo systemctl start libvirtd
+        sudo usermod -aG libvirt $USER
+        newgrp libvirt
+        ```
+
+    3. Prepare Virtual Machine Environment:
+        ```
+        sudo pacman -S wget
+        wget https://mirrors.kernel.org/archlinux/iso/latest/archlinux.iso
+        qemu-img create -f qcow2 arch-vm.qcow2 20G
+        ```
+
+    4. Launch Virtual Machine:
+        ```
+        qemu-system-x86_64 -enable-kvm -m 4G -smp 2 -cdrom archlinux.iso -boot order=d -drive file=arch-vm.qcow2
+        ```
+    5. Etc. etc.
