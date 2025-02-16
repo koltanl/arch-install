@@ -2,7 +2,7 @@
 #GLOBALS
 #############################################
 export STARTUP_TIMER="true"
-export EDITOR=kate
+export EDITOR=micro
 
 if [ -f ~/.functions ]; then
     source ~/.functions
@@ -86,7 +86,7 @@ fi
 
 # Colors
 user_color="%F{green}"
-location_color="%F{cyan}" 
+location_color="%F{cyan}"
 hostname_color="%F{blue}"
 # Construct the prompt with dynamic hostname coloring
 PROMPT="${user_color}%n%f@${hostname_color}%m ${location_color}%~%f -> "
@@ -112,31 +112,31 @@ zstyle ':completion::complete:*' cache-path ~/.cache/zsh/$HOST
 
 # Ignored patterns
 zstyle ':completion:*:functions' ignored-patterns '_*'
-zstyle ':completion:*:*:users' ignored-patterns \
-  adm apache bin daemon games gdm halt ident junkbust lp mail mailnull \
-  named news nfsnobody nobody nscd ntp operator pcap postgres radvd \
-  rpc rpcuser rpm shutdown squid sshd sync uucp vcsa xfs avahi-autoipd\
-  avahi backup messagebus beagleindex debian-tor dhcp dnsmasq fetchmail\
-  firebird gnats haldaemon hplip irc klog list man cupsys postfix\
-  proxy syslog www-data mldonkey sys snort
-zstyle ':completion:*:*:(vim|nvim|nano|emacs|vi):*' ignored-patterns '*/'
+# Simplify ignored users - you probably don't need to ignore *all* of these
+zstyle ':completion:*:*:users' ignored-patterns root
+# Less restrictive ignored patterns for editors
+zstyle ':completion:*:*:(vim|nvim|nano|emacs|vi):*' ignored-patterns '*/.#*'
 
 # Ordering and matching
-zstyle ':completion:*' completer _expand _complete _ignored _approximate
+zstyle ':completion:*' completer _expand _complete _ignored _approximate _prefix
 zstyle ':completion:*' group-order dirs files
-zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}' 'r:|[._-]=* r:|=*' 'l:|=* r:|=*'
+# More robust matching (add to existing matcher-list)
+zstyle ':completion:*' matcher-list '' \
+  'm:{a-z}={A-Z} m:{A-Z}={a-z}' \
+  'r:|[._-]=* r:|=*' 'l:|=* r:|=*' \
+  'l:|=* r:|=* l:|=* r:|=*'
+  # Consider adding these for even more flexible matching:
+  # 'b:=* B:=*'  # Allow inserting characters at the beginning
+  # 'm:{[:lower:]}={[:upper:]} m:{[:upper:]}={[:lower:]} r:|[._-]=* r:|=* l:|=* r:|=*' # Case-insensitive + other matchers
 
-# Remove duplicates
+# Remove duplicates (these settings are good)
 zstyle ':completion:*' ignored-patterns '*[[:blank:]][[:blank:]]*'
 zstyle ':completion:*' list-suffixes true
 zstyle ':completion:*' expand prefix suffix
 zstyle ':completion:*' squeeze-slashes true
 zstyle ':completion:*' unique true
 
-# Approximate matching
-zstyle ':completion:*:approximate:*' max-errors 'reply=(reply=( $(( ($#PREFIX+$#SUFFIX)/2 )) numeric ))'
-
-# Formatting
+# Formatting (these are good)
 zstyle ':completion:*' list-prompt '%SAt %p: Hit TAB for more, or the character to insert%s'
 zstyle ':completion:*' select-prompt '%SScrolling active: current selection at %p%s'
 zstyle ':completion:*:descriptions' format '%F{cyan}%B%d%b%f'
@@ -144,7 +144,7 @@ zstyle ':completion:*:messages' format '%F{blue}%d%f'
 zstyle ':completion:*:warnings' format '%F{red}No matches for: %d%f'
 zstyle ':completion:*:corrections' format '%B%d (errors: %e)%b'
 
-# Grouping Files and Directories
+# Grouping Files and Directories (these are good)
 zstyle ':completion:*:matches' group 'yes'
 zstyle ':completion:*' group-name ''
 zstyle ':completion:*:files' menu yes select
@@ -157,13 +157,13 @@ else
 fi
 
 # display the part of the suggestion that comes after the prefix you have already typed
-zstyle ':completion:*' prefix-hidden true
+# zstyle ':completion:*' prefix-hidden true  # Commented out - can interfere with predictions
 
 # Colors
 zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 
-# Hostname completion
-zstyle ':completion:*' hosts $(awk '/^\[^#\]/ {print $2 $3" "$4" "$5}' /etc/hosts | grep -v ip6- && grep "^#%" /etc/hosts | awk -F% '{print $2}')
+# Hostname completion - simplified
+zstyle ':completion:*' hosts $(hostname -f 2>/dev/null; hostname -s 2>/dev/null)
 
 # Offer indexes before parameters in subscripts
 zstyle ':completion:*:*:-subscript-:*' tag-order indexes parameters
@@ -188,12 +188,14 @@ zstyle '*' single-ignored show
 #############################################
 #Individual program initialization
 #############################################
+# Ensure zoxide and atuin are initialized unconditionally
 if [[ -x "$(command -v zoxide)" ]]; then
     eval "$(zoxide init zsh)"
     alias cd='z'
 fi
-[[ -x "$(command -v atuin)" ]] && eval "$(atuin init zsh)"
+eval "$(atuin init zsh)"  # Atuin initialization - made unconditional
 [[ -x "$(command -v oh-my-posh)" ]] && eval "$(oh-my-posh init zsh --config ~/.config/omp.json)"
+
 
 #############################################
 #RAN EVERY REFRESH
@@ -214,5 +216,3 @@ if [[ "$STARTUP_TIMER" == "true" ]]; then
         echo "Shell startup time: ${STARTUP_TIME_S} seconds and ${STARTUP_TIME_MS} milliseconds"
     fi
 fi
-
-. "$HOME/.atuin/bin/env"

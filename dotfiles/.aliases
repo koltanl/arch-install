@@ -23,7 +23,7 @@ alias uninstall='purge'
 alias calc='bc'
 alias calculator='bc'
 
-alias update='sudo pacman -Syu --noconfirm && yay -Syu --aur --noconfirm && zplug update && _update_oh_my_posh && _update_atuin && sudo reboot'
+alias update='sudo pacman -Syu --noconfirm && yay -Syu --aur --noconfirm && _update_oh_my_posh && _update_atuin && sudo reboot'
 
 #logs
 alias errors.boot='sudo journalctl -b -p err | $PAGER'
