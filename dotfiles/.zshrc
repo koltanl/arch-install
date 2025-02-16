@@ -21,7 +21,7 @@ source ~/usr/share/doc/pkgfile/command-not-found.zsh
 fi
 
 export LOCAL_IP=$(ip route get 1 | awk '{print $7}')
-export PATH="$HOME/bin:$HOME/.local/bin:/sbin:/usr/sbin:/opt/android-studio/bin:/usr/local/sbin:$PATH"
+export PATH="$HOME/bin:$HOME/.local/bin:/sbin:/usr/sbin:/opt/android-studio/bin:/usr/local/sbin:$HOME/.atuin/bin:$PATH"
 # Check for 'moar' first; if not found, check for 'less'; if neither, default to 'more'
 if command -v moar &> /dev/null; then
     alias moar="moar -colors auto -wrap -mousemode auto"
