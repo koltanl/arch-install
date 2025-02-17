@@ -19,7 +19,7 @@ fi
 if [ -f ~/usr/share/doc/pkgfile/command-not-found.zsh ]; then
 source ~/usr/share/doc/pkgfile/command-not-found.zsh
 fi
-export TERM=xterm-kitty
+export TERM=xterm-256color
 export LOCAL_IP=$(ip route get 1 | awk '{print $7}')
 export PATH="$HOME/bin:$HOME/.local/bin:/sbin:/usr/sbin:/opt/android-studio/bin:/usr/local/sbin:$HOME/.atuin/bin:$PATH"
 # Check for 'moar' first; if not found, check for 'less'; if neither, default to 'more'
